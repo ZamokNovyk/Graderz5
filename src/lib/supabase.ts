@@ -7,8 +7,8 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
 if (!supabaseUrl || !supabaseAnonKey) {
   console.warn(
-    '⚠️ Supabase Warning: VITE_SUPABASE_URL o VITE_SUPABASE_ANON_KEY no están configurados en .env.\n' +
-    'Para conectar con tu base de datos de Supabase, agrega las credenciales en tu archivo .env o en el panel de Secrets.'
+    '⚠️ Supabase Warning: VITE_SUPABASE_URL o VITE_SUPABASE_ANON_KEY no fueron provistas durante el build.\n' +
+    'Asegúrate de agregar VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY en las "Environment variables" de tu proyecto en Cloudflare Pages y re-desplegar.'
   );
 }
 
