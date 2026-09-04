@@ -385,8 +385,8 @@ export function evaluatePersonajeMatch(
 /**
  * Detects the visual category of a public figure based on biographical text keywords.
  */
-export function detectType(nombre: string, extract: string): 'cantante' | 'deportista' | 'politico' | 'personaje' {
-  const text = `${nombre} ${extract}`.toLowerCase();
+export function detectType(nombre: string, extract: string, occupation?: string): 'cantante' | 'deportista' | 'politico' | 'personaje' {
+  const text = `${nombre} ${extract} ${occupation || ''}`.toLowerCase();
   if (
     text.includes('cantante') || 
     text.includes('rapero') || 
@@ -397,7 +397,9 @@ export function detectType(nombre: string, extract: string): 'cantante' | 'depor
     text.includes('singer') || 
     text.includes('blackpink') ||
     text.includes('popstar') ||
-    text.includes('banda')
+    text.includes('banda') ||
+    text.includes('cantautor') ||
+    text.includes('compositor')
   ) {
     return 'cantante';
   }
@@ -412,7 +414,9 @@ export function detectType(nombre: string, extract: string): 'cantante' | 'depor
     text.includes('baloncesto') || 
     text.includes('tenista') ||
     text.includes('fórmula') ||
-    text.includes('boxeador')
+    text.includes('boxeador') ||
+    text.includes('nadador') ||
+    text.includes('piloto')
   ) {
     return 'deportista';
   }
@@ -420,12 +424,35 @@ export function detectType(nombre: string, extract: string): 'cantante' | 'depor
   if (
     text.includes('político') || 
     text.includes('politico') || 
+    text.includes('política') || 
+    text.includes('politica') || 
     text.includes('presidente') || 
     text.includes('president') || 
     text.includes('primer ministro') || 
     text.includes('senador') ||
     text.includes('alcalde') ||
-    text.includes('gobernador')
+    text.includes('gobernador') ||
+    text.includes('princesa') ||
+    text.includes('príncipe') ||
+    text.includes('principe') ||
+    text.includes('monarca') ||
+    text.includes('reina') ||
+    text.includes('rey') ||
+    text.includes('infanta') ||
+    text.includes('realeza') ||
+    text.includes('casa real') ||
+    text.includes('borbón') ||
+    text.includes('borbon') ||
+    text.includes('heredera') ||
+    text.includes('heredero') ||
+    text.includes('canciller') ||
+    text.includes('diplomátic') ||
+    text.includes('ministro') ||
+    text.includes('ministra') ||
+    text.includes('diputado') ||
+    text.includes('congresista') ||
+    text.includes('líder') ||
+    text.includes('lider')
   ) {
     return 'politico';
   }

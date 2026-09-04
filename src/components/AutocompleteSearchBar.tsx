@@ -117,7 +117,10 @@ export default function AutocompleteSearchBar({
 
     try {
       const response = await searchWithAutocompleteAdvanced(cleanTerm, 0.25);
-      setSearchResponse(response);
+      setSearchResponse({
+        ...response,
+        suggestions: (response.suggestions || []).slice(0, 10)
+      });
       setIsOpen(true);
       setSelectedIndex(-1);
     } catch (err) {

@@ -206,19 +206,21 @@ export default function App() {
         }}
       />
 
-      {/* Floating Square Button to Add Personaje in Bottom Right Corner */}
-      <div className="fixed bottom-6 right-6 sm:bottom-8 sm:right-8 z-40">
-        <button
-          id="btn-floating-add-personaje"
-          onClick={() => setIsAddModalOpen(true)}
-          className="w-13 h-13 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-br from-red-600 via-red-600 to-red-700 hover:from-red-500 hover:to-red-600 active:scale-95 text-white shadow-[0_0_30px_rgba(239,68,68,0.55)] border-2 border-red-400/40 flex items-center justify-center transition-all duration-300 hover:scale-105 cursor-pointer group"
-          title="Agregar personaje"
-          aria-label="Agregar personaje"
-        >
-          <Plus className="w-6 h-6 sm:w-7 sm:h-7 text-white group-hover:rotate-90 transition-transform duration-300" />
-          <span className="sr-only">Agregar personaje</span>
-        </button>
-      </div>
+      {/* Floating Square Button to Add Personaje in Bottom Right Corner (ONLY on main home page) */}
+      {!activePersonajeSlug && searchQueryParam === null && activeTab === 'home' && (
+        <div className="fixed bottom-20 right-6 sm:bottom-24 sm:right-8 z-40">
+          <button
+            id="btn-floating-add-personaje"
+            onClick={() => setIsAddModalOpen(true)}
+            className="w-13 h-13 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-br from-red-600 via-red-600 to-red-700 hover:from-red-500 hover:to-red-600 active:scale-95 text-white shadow-[0_0_30px_rgba(239,68,68,0.55)] border-2 border-red-400/40 flex items-center justify-center transition-all duration-300 hover:scale-105 cursor-pointer group"
+            title="Agregar personaje"
+            aria-label="Agregar personaje"
+          >
+            <Plus className="w-6 h-6 sm:w-7 sm:h-7 text-white group-hover:rotate-90 transition-transform duration-300" />
+            <span className="sr-only">Agregar personaje</span>
+          </button>
+        </div>
+      )}
 
       {/* Add Personaje Floating Window (Modal) with Wikipedia & Wikidata Logic */}
       <AddPersonajeModal
