@@ -63,8 +63,8 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
   const [copiedUid, setCopiedUid] = useState(false);
   const [isImageLightboxOpen, setIsImageLightboxOpen] = useState(false);
   
-  // Interactive Tabs
-  const [activeTab, setActiveTab] = useState<'informacion' | 'resenas' | 'crushes' | 'ship' | 'estadistica'>('informacion');
+  // Interactive Tabs (Default to 'resenas' per user request)
+  const [activeTab, setActiveTab] = useState<'informacion' | 'resenas' | 'ship' | 'estadistica'>('resenas');
 
   // Rating and voting state
   const [userRating, setUserRating] = useState<number | null>(null);
@@ -97,32 +97,16 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
   useEffect(() => {
     async function loadData() {
       setLoading(true);
-      const data = await getPersonajeBySlug(slug);
-      setPersonaje(data);
-
-      // Load other characters for ship calculator
-      const list = await getPersonajesList();
-      setPersonajesList(list.filter(p => p.slug !== slug));
-
-      // Get user's effective UID
       const effectiveUid = currentUser?.uid || getOrCreateGuestUid();
 
-      // Check user's saved attitude for this character
-      const userActitud = await getUserActitudForPersonaje(slug, effectiveUid);
-      setActiveActitud(userActitud);
-
-      // Initialize counters directly and strictly from real database records (no fake/invented counts)
-      const realCounts = await getRealActitudCounts(slug);
-      setCounts({
-        conozco: realCounts.conozco,
-        fan: realCounts.fan,
-        simp: realCounts.simp,
-        hater: realCounts.hater
-      });
-
-      // Load reviews and user's review status
+      // 1. CARGA ULTRA-RÁPIDA (Prioridad Principal): Personaje + Reseñas en paralelo
       try {
-        const reviews = await getResenasForPersonaje(slug);
+        const [data, reviews] = await Promise.all([
+          getPersonajeBySlug(slug),
+          getResenasForPersonaje(slug).catch(() => [])
+        ]);
+
+        setPersonaje(data);
         setResenasList(reviews);
 
         const userReview = reviews.find(r => r.user_uid === effectiveUid);
@@ -136,10 +120,21 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
           setUserReviewText('');
         }
       } catch (err) {
-        console.warn('Error al cargar reseñas:', err);
+        console.error('Error cargando perfil primario:', err);
+      } finally {
+        // ¡Ocultar pantalla de carga de inmediato para el usuario!
+        setLoading(false);
       }
 
-      setLoading(false);
+      // 2. CARGA SECUNDARIA EN SEGUNDO PLANO (Non-blocking lazy loading)
+      getPersonajesList().then(list => setPersonajesList(list.filter(p => p.slug !== slug))).catch(() => {});
+      getUserActitudForPersonaje(slug, effectiveUid).then(userActitud => setActiveActitud(userActitud)).catch(() => {});
+      getRealActitudCounts(slug).then(realCounts => setCounts({
+        conozco: realCounts.conozco,
+        fan: realCounts.fan,
+        simp: realCounts.simp,
+        hater: realCounts.hater
+      })).catch(() => {});
     }
     loadData();
   }, [slug, currentUser]);
@@ -520,11 +515,6 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
             {personaje.nombre}
           </h1>
           <div className="flex flex-wrap items-center justify-center gap-2">
-            <div className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-zinc-400 bg-[#141419] border border-white/5 px-3.5 py-1 rounded-full font-mono">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-              <span>Persona Verificada Q5</span>
-            </div>
-
             {personaje.death_date && (
               <div className="inline-flex items-center gap-1.5 text-[10px] font-bold tracking-wider text-red-200 bg-red-950/50 border border-red-500/40 px-3.5 py-1 rounded-full font-mono shadow-[0_0_12px_rgba(220,38,38,0.25)]">
                 <HeartCrack className="w-3.5 h-3.5 text-red-400" />
@@ -698,18 +688,6 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
         >
           <Star className="w-4 h-4" />
           <span>Reseñas</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('crushes')}
-          className={`flex-1 min-w-[120px] py-3 rounded-xl text-xs font-semibold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-            activeTab === 'crushes'
-              ? 'text-[#ffbf00] bg-white/5 border border-white/10 shadow-inner'
-              : 'text-zinc-400 hover:text-white'
-          }`}
-        >
-          <Heart className="w-4 h-4" />
-          <span>Crushes</span>
         </button>
 
         <button
@@ -1283,38 +1261,7 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
           </div>
         )}
 
-        {/* 3. CRUSHES TAB (Engagement statistics and registry) */}
-        {activeTab === 'crushes' && (
-          <div className="space-y-6">
-            <div className="bg-[#111116] border border-white/5 rounded-2xl p-6 shadow-xl text-center space-y-5">
-              <div className="w-14 h-14 bg-red-500/10 border border-red-500/20 text-red-500 rounded-full flex items-center justify-center mx-auto shadow-md">
-                <Heart className="w-7 h-7 fill-red-500 text-red-500" />
-              </div>
 
-              <div className="space-y-2">
-                <h3 className="text-xl font-bold text-white uppercase tracking-wide">
-                  Crush Counter
-                </h3>
-                <p className="text-sm text-zinc-300">
-                  Este personaje tiene <strong className="text-red-500 font-mono text-base">{crushCount}</strong> personas que lo consideran su crush en Graderz5.
-                </p>
-              </div>
-
-              <div className="pt-2">
-                <button
-                  onClick={handleRegisterCrush}
-                  className={`px-6 py-3 rounded-xl font-bold text-xs uppercase tracking-widest transition-all cursor-pointer ${
-                    hasCrushed
-                      ? 'bg-[#181824] hover:bg-[#20202e] text-red-500 border border-red-500/30 shadow-inner'
-                      : 'bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-950/60'
-                  }`}
-                >
-                  {hasCrushed ? 'Quitar de mis Crushes' : 'Registrar como mi crush'}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* 4. SHIP CALCULATOR TAB (Find compatibility match) */}
         {activeTab === 'ship' && (

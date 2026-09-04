@@ -1243,8 +1243,34 @@ export async function savePersonaje(
 ): Promise<{ success: boolean; personaje: Personaje; source: 'supabase' | 'local'; error?: string }> {
   const baseSlug = data.slug || createSlug(data.nombre);
   
-  // Garantizar unicidad de slug
+  // Evitar duplicados inteligentes: Buscar si ya existe por Wikidata ID, nombre exacto o slug
   const allExisting = await getPersonajesList();
+  
+  const existingPersonaje = allExisting.find(p => {
+    // 1. Coincidencia por wikidataId real
+    if (data.wikidataId && data.wikidataId !== 'Q5' && p.wikidata_id === data.wikidataId) {
+      return true;
+    }
+    // 2. Coincidencia por nombre exacto (ignorando mayúsculas/minúsculas y espacios extras)
+    if (p.nombre.trim().toLowerCase() === data.nombre.trim().toLowerCase()) {
+      return true;
+    }
+    // 3. Coincidencia por slug exacto
+    if (p.slug === baseSlug) {
+      return true;
+    }
+    return false;
+  });
+
+  if (existingPersonaje) {
+    console.log(`[savePersonaje] Personaje ya existente encontrado: "${existingPersonaje.nombre}". Retornando el perfil existente.`);
+    return {
+      success: true,
+      personaje: existingPersonaje,
+      source: supabase ? 'supabase' : 'local'
+    };
+  }
+
   let finalSlug = baseSlug;
   let counter = 1;
   while (allExisting.some(p => p.slug === finalSlug)) {
