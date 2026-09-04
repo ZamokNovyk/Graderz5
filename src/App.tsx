@@ -12,6 +12,7 @@ import { BottomNav } from './components/BottomNav';
 import { ItemDetailModal } from './components/ItemDetailModal';
 import { AddPersonajeModal } from './components/AddPersonajeModal';
 import { PersonajeProfileView } from './components/PersonajeProfileView';
+import { SearchResultsView } from './components/SearchResultsView';
 import { Check, Plus } from 'lucide-react';
 
 import { auth, onAuthStateChanged, signInWithGoogle, logoutUser, User } from './lib/firebase';
@@ -26,6 +27,7 @@ export default function App() {
 
   // Character Profile route state (/personajes/:slug)
   const [activePersonajeSlug, setActivePersonajeSlug] = useState<string | null>(null);
+  const [searchQueryParam, setSearchQueryParam] = useState<string | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
   // Auth State
@@ -37,15 +39,24 @@ export default function App() {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  // URL Path router listener for /personajes/:slug
+  // URL Path router listener for /personajes/:slug and /search
   useEffect(() => {
     const handleUrlRoute = () => {
       const path = window.location.pathname;
-      const match = path.match(/^\/personajes\/([a-zA-Z0-9._-]+)/);
-      if (match && match[1]) {
-        setActivePersonajeSlug(match[1]);
-      } else {
+      const searchParams = new URLSearchParams(window.location.search);
+      const query = searchParams.get('q');
+
+      if (path.startsWith('/search')) {
+        setSearchQueryParam(query || '');
         setActivePersonajeSlug(null);
+      } else {
+        setSearchQueryParam(null);
+        const match = path.match(/^\/personajes\/([a-zA-Z0-9._-]+)/);
+        if (match && match[1]) {
+          setActivePersonajeSlug(match[1]);
+        } else {
+          setActivePersonajeSlug(null);
+        }
       }
     };
 
@@ -102,12 +113,27 @@ export default function App() {
 
   const handleOpenPersonaje = (slug: string) => {
     setActivePersonajeSlug(slug);
+    setSearchQueryParam(null);
     window.history.pushState(null, '', `/personajes/${slug}`);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const handleSearchSubmit = (q: string) => {
+    setSearchQuery(q);
+    window.history.pushState(null, '', `/search?q=${encodeURIComponent(q)}`);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  };
+
   const handleBackFromPersonaje = () => {
     setActivePersonajeSlug(null);
+    setSearchQueryParam(null);
+    setActiveTab('home');
+    window.history.pushState(null, '', '/');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleBackFromSearch = () => {
+    setSearchQueryParam(null);
     setActiveTab('home');
     window.history.pushState(null, '', '/');
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -121,14 +147,8 @@ export default function App() {
       {/* Header with "Unirse" button */}
       <Header
         searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-        onOpenSearch={() => {
-          if (activePersonajeSlug) {
-            handleBackFromPersonaje();
-          } else if (activeTab !== 'home') {
-            setActiveTab('home');
-          }
-        }}
+        onSearchChange={handleSearchSubmit}
+        onOpenSearch={() => {}}
         onSelectPersonaje={handleOpenPersonaje}
         onDownloadApp={handleDownloadApp}
         currentUser={currentUser}
@@ -147,12 +167,18 @@ export default function App() {
             onBack={handleBackFromPersonaje} 
             currentUser={currentUser}
           />
+        ) : searchQueryParam !== null ? (
+          <SearchResultsView
+            query={searchQueryParam}
+            onBack={handleBackFromSearch}
+            onSelectPersonaje={handleOpenPersonaje}
+          />
         ) : (
           <>
             {activeTab === 'home' && (
               <HeroSection
                 searchQuery={searchQuery}
-                onSearchChange={setSearchQuery}
+                onSearchChange={handleSearchSubmit}
                 onSelectPersonaje={handleOpenPersonaje}
                 onOpenAddPersonaje={() => setIsAddModalOpen(true)}
               />
@@ -170,9 +196,9 @@ export default function App() {
 
       {/* Floating Bottom Dock Navigation */}
       <BottomNav
-        activeTab={activePersonajeSlug ? ('none' as any) : activeTab}
+        activeTab={activePersonajeSlug || searchQueryParam !== null ? ('none' as any) : activeTab}
         onSelectTab={(tab) => {
-          if (activePersonajeSlug) {
+          if (activePersonajeSlug || searchQueryParam !== null) {
             handleBackFromPersonaje();
           }
           setActiveTab(tab);
