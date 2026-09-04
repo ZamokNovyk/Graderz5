@@ -1,15 +1,27 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { ALL_COUNTRIES } from '../data/countries';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { ALL_COUNTRIES, CountryItem } from '../data/countries';
 import { FlagImage } from './FlagImage';
-import { ChevronDown, Search, Check } from 'lucide-react';
+import { ChevronDown, Search, Check, Globe } from 'lucide-react';
 
 interface CountrySelectProps {
   value: string;
   onChange: (countryName: string) => void;
   className?: string;
+  allowAll?: boolean;
+  allOptionLabel?: string;
+  placeholder?: string;
+  extraCountries?: string[];
 }
 
-export const CountrySelect: React.FC<CountrySelectProps> = ({ value, onChange, className = '' }) => {
+export const CountrySelect: React.FC<CountrySelectProps> = ({ 
+  value, 
+  onChange, 
+  className = '',
+  allowAll = false,
+  allOptionLabel = 'Todas las nacionalidades',
+  placeholder = 'Seleccionar país',
+  extraCountries = []
+}) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -25,10 +37,25 @@ export const CountrySelect: React.FC<CountrySelectProps> = ({ value, onChange, c
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const filteredCountries = ALL_COUNTRIES.filter(c =>
+  const combinedCountries = useMemo(() => {
+    if (!extraCountries || extraCountries.length === 0) return ALL_COUNTRIES;
+    const existingNames = new Set(ALL_COUNTRIES.map(c => c.name.toLowerCase()));
+    const extras: CountryItem[] = extraCountries
+      .filter(name => Boolean(name && name !== 'No especificada' && name !== 'todos' && !existingNames.has(name.toLowerCase())))
+      .map(name => ({
+        code: '',
+        flag: '🏳️',
+        name
+      }));
+    return [...ALL_COUNTRIES, ...extras].sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }));
+  }, [extraCountries]);
+
+  const filteredCountries = combinedCountries.filter(c =>
     c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     c.code.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const isAllSelected = allowAll && (!value || value === 'todos');
 
   return (
     <div className={`relative ${className}`} ref={dropdownRef}>
@@ -39,8 +66,17 @@ export const CountrySelect: React.FC<CountrySelectProps> = ({ value, onChange, c
         className="w-full bg-[#181820] hover:bg-[#1f1f2a] border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-red-500/50 cursor-pointer flex items-center justify-between transition-all"
       >
         <div className="flex items-center gap-2.5 truncate">
-          <FlagImage countryName={value} size="sm" />
-          <span className="font-medium truncate">{value || 'Seleccionar país'}</span>
+          {isAllSelected ? (
+            <>
+              <Globe className="w-4 h-4 text-zinc-400 shrink-0" />
+              <span className="font-medium truncate">{allOptionLabel}</span>
+            </>
+          ) : (
+            <>
+              <FlagImage countryName={value} size="sm" />
+              <span className="font-medium truncate">{value || placeholder}</span>
+            </>
+          )}
         </div>
         <ChevronDown className={`w-4 h-4 text-zinc-400 transition-transform duration-200 shrink-0 ${isOpen ? 'rotate-180' : ''}`} />
       </button>
@@ -63,14 +99,37 @@ export const CountrySelect: React.FC<CountrySelectProps> = ({ value, onChange, c
 
           {/* Country List */}
           <div className="max-h-56 overflow-y-auto custom-scrollbar p-1">
+            {/* Optional 'All' Option */}
+            {allowAll && (!searchTerm || allOptionLabel.toLowerCase().includes(searchTerm.toLowerCase()) || 'todos'.includes(searchTerm.toLowerCase())) && (
+              <button
+                type="button"
+                onClick={() => {
+                  onChange('todos');
+                  setIsOpen(false);
+                  setSearchTerm('');
+                }}
+                className={`w-full flex items-center justify-between px-3 py-2 text-xs rounded-lg transition-colors text-left cursor-pointer mb-1 border-b border-white/5 ${
+                  isAllSelected
+                    ? 'bg-red-500/20 text-white font-semibold'
+                    : 'text-zinc-300 hover:bg-white/5 hover:text-white'
+                }`}
+              >
+                <div className="flex items-center gap-2.5 truncate">
+                  <Globe className="w-4 h-4 text-zinc-400 shrink-0" />
+                  <span className="truncate">{allOptionLabel}</span>
+                </div>
+                {isAllSelected && <Check className="w-3.5 h-3.5 text-red-400 shrink-0" />}
+              </button>
+            )}
+
             {filteredCountries.length === 0 ? (
               <div className="p-3 text-center text-xs text-zinc-500">No se encontraron países</div>
             ) : (
               filteredCountries.map((c) => {
-                const isSelected = value?.toLowerCase() === c.name.toLowerCase();
+                const isSelected = !isAllSelected && value?.toLowerCase() === c.name.toLowerCase();
                 return (
                   <button
-                    key={c.code}
+                    key={c.code || c.name}
                     type="button"
                     onClick={() => {
                       onChange(c.name);

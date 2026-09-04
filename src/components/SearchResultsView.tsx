@@ -21,6 +21,8 @@ import {
 import { Personaje } from '../types';
 import { getPersonajesList } from '../lib/personajesService';
 import { detectType } from '../lib/search';
+import { CountrySelect } from './CountrySelect';
+import { FlagImage } from './FlagImage';
 
 interface SearchResultsViewProps {
   query: string;
@@ -103,7 +105,13 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
 
     // 3. Nationality Filter
     if (selectedNationality !== 'todos') {
-      results = results.filter(p => p.nationality && p.nationality.toLowerCase().trim() === selectedNationality.toLowerCase().trim());
+      const targetNat = selectedNationality.toLowerCase().trim();
+      results = results.filter(p => {
+        if (!p.nationality || p.nationality === 'No especificada') return false;
+        // Split compound nationalities (e.g. "Japón / Corea del Sur") so filtering by either matches
+        const parts = p.nationality.split(/[/,;]/).map(part => part.toLowerCase().trim());
+        return parts.includes(targetNat) || p.nationality.toLowerCase().includes(targetNat);
+      });
     }
 
     // 4. Category / Occupation Chip Filter
@@ -189,14 +197,23 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
     sortBy
   ]);
 
-  // Extract unique nationalities
+  // Extract unique nationalities, merging common world nationalities with those registered in characters
   const uniqueNationalities = Array.from(
-    new Set(
-      personajes
-        .map(p => p.nationality)
-        .filter((n): n is string => Boolean(n && n !== 'No especificada'))
-    )
-  ).sort();
+    new Set([
+      'España', 'México', 'Argentina', 'Colombia', 'Chile', 'Perú', 'Venezuela', 
+      'Ecuador', 'Uruguay', 'Paraguay', 'Bolivia', 'Costa Rica', 'Panamá', 
+      'República Dominicana', 'El Salvador', 'Guatemala', 'Honduras', 'Nicaragua', 
+      'Cuba', 'Puerto Rico', 'Estados Unidos', 'Reino Unido', 'Francia', 
+      'Alemania', 'Italia', 'Japón', 'Corea del Sur', 'Corea del Norte', 'China', 'Canadá', 
+      'Brasil', 'Portugal', 'Rusia', 'Australia', 'Tailandia', 'Andorra', 'Suiza', 
+      'Bélgica', 'Suecia', 'Noruega', 'Dinamarca', 'Países Bajos',
+      ...personajes
+        .flatMap(p => {
+          if (!p.nationality || p.nationality === 'No especificada') return [];
+          return p.nationality.split(/[/,;]/).map(part => part.trim()).filter(Boolean);
+        })
+    ])
+  ).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
 
   // Helper to reset all filters
   const resetAllFilters = () => {
@@ -427,22 +444,20 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
                     </div>
                   </div>
 
-                  {/* 5. Nationality filter */}
-                  {uniqueNationalities.length > 0 && (
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Nacionalidad</label>
-                      <select
-                        value={selectedNationality}
-                        onChange={(e) => setSelectedNationality(e.target.value)}
-                        className="w-full bg-[#16161d] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-red-500/50"
-                      >
-                        <option value="todos">Todas las nacionalidades</option>
-                        {uniqueNationalities.map(nat => (
-                          <option key={nat} value={nat}>{nat}</option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
+                  {/* 5. Nationality filter with Flags and Search */}
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <Globe className="w-3 h-3 text-red-500" />
+                      Nacionalidad (País)
+                    </label>
+                    <CountrySelect
+                      value={selectedNationality}
+                      onChange={(country) => setSelectedNationality(country)}
+                      allowAll={true}
+                      allOptionLabel="Todas las nacionalidades"
+                      extraCountries={uniqueNationalities}
+                    />
+                  </div>
 
                   {/* 6. Sorting */}
                   <div className="space-y-2 pt-2 border-t border-white/5">
@@ -563,6 +578,7 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
 
           {selectedNationality !== 'todos' && (
             <span className="inline-flex items-center gap-1.5 bg-red-500/10 border border-red-500/30 text-red-400 text-[11px] font-semibold px-2.5 py-0.5 rounded-full">
+              <FlagImage countryName={selectedNationality} size="xs" />
               País: {selectedNationality}
               <X className="w-3 h-3 cursor-pointer hover:text-white" onClick={() => setSelectedNationality('todos')} />
             </span>
