@@ -1,0 +1,6 @@
+{
+  "name": "Graderz5",
+  "description": "Plataforma interactiva de calificaciones y valoraciones de campus Graderz5 en rojo y negro.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
