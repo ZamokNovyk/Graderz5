@@ -26,9 +26,11 @@ import {
   Ruler,
   Weight,
   HeartCrack,
-  Briefcase
+  Briefcase,
+  Trash2,
+  User as UserIcon
 } from 'lucide-react';
-import { ActitudType, Personaje } from '../types';
+import { ActitudType, Personaje, PersonajeResena } from '../types';
 import { User } from '../lib/firebase';
 import { getPersonajeBySlug, votePersonaje, getPersonajesList } from '../lib/personajesService';
 import { 
@@ -38,7 +40,14 @@ import {
   togglePersonajeActitud,
   getRealActitudCounts
 } from '../lib/actitudesService';
+import { 
+  getResenasForPersonaje, 
+  getUserResenaForPersonaje, 
+  saveResena, 
+  deleteResena 
+} from '../lib/resenasService';
 import { getCountryFlag } from '../data/countries';
+import { FlagImage } from './FlagImage';
 
 interface PersonajeProfileViewProps {
   slug: string;
@@ -61,6 +70,11 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
   const [userRating, setUserRating] = useState<number | null>(null);
   const [hoverRating, setHoverRating] = useState<number | null>(null);
   const [voteSubmitted, setVoteSubmitted] = useState(false);
+  
+  // Reviews state
+  const [resenasList, setResenasList] = useState<PersonajeResena[]>([]);
+  const [userReviewText, setUserReviewText] = useState('');
+  const [isSubmittingResena, setIsSubmittingResena] = useState(false);
 
   // Ship Calculator State
   const [shipTargetSlug, setShipTargetSlug] = useState<string>('');
@@ -105,6 +119,25 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
         simp: realCounts.simp,
         hater: realCounts.hater
       });
+
+      // Load reviews and user's review status
+      try {
+        const reviews = await getResenasForPersonaje(slug);
+        setResenasList(reviews);
+
+        const userReview = reviews.find(r => r.user_uid === effectiveUid);
+        if (userReview) {
+          setUserRating(userReview.stars);
+          setVoteSubmitted(true);
+          setUserReviewText(userReview.review_text || '');
+        } else {
+          setUserRating(null);
+          setVoteSubmitted(false);
+          setUserReviewText('');
+        }
+      } catch (err) {
+        console.warn('Error al cargar reseñas:', err);
+      }
 
       setLoading(false);
     }
@@ -182,14 +215,75 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
     }
   };
 
-  const handleVote = async (score: number) => {
+  const handleVote = (score: number) => {
     if (voteSubmitted || !personaje) return;
     setUserRating(score);
-    const updated = await votePersonaje(personaje.slug, score);
-    if (updated) {
-      setPersonaje({ ...updated });
+  };
+
+  const handleSubmitResena = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!personaje || isSubmittingResena || userRating === null) return;
+
+    setIsSubmittingResena(true);
+    const effectiveUid = currentUser?.uid || getOrCreateGuestUid();
+    const userPrefs = getUserPreferences();
+
+    try {
+      const res = await saveResena({
+        personajeSlug: personaje.slug,
+        personajeNombre: personaje.nombre,
+        userUid: effectiveUid,
+        userName: currentUser?.displayName || currentUser?.email || 'Usuario Invitado',
+        userGender: userPrefs.gender,
+        userNationality: userPrefs.nationality,
+        isAnonymous: !currentUser,
+        registeredWith: currentUser ? 'google' : 'anonymous',
+        reviewText: userReviewText,
+        stars: userRating
+      });
+
+      if (res.success) {
+        const updatedChar = await getPersonajeBySlug(personaje.slug);
+        if (updatedChar) {
+          setPersonaje(updatedChar);
+        }
+
+        const reviews = await getResenasForPersonaje(personaje.slug);
+        setResenasList(reviews);
+        setVoteSubmitted(true);
+      }
+    } catch (err) {
+      console.error('Error al guardar reseña:', err);
+    } finally {
+      setIsSubmittingResena(false);
     }
-    setVoteSubmitted(true);
+  };
+
+  const handleDeleteResena = async () => {
+    if (!personaje || isSubmittingResena) return;
+    setIsSubmittingResena(true);
+    const effectiveUid = currentUser?.uid || getOrCreateGuestUid();
+
+    try {
+      const success = await deleteResena(personaje.slug, effectiveUid);
+      if (success) {
+        const updatedChar = await getPersonajeBySlug(personaje.slug);
+        if (updatedChar) {
+          setPersonaje(updatedChar);
+        }
+
+        const reviews = await getResenasForPersonaje(personaje.slug);
+        setResenasList(reviews);
+
+        setUserRating(null);
+        setVoteSubmitted(false);
+        setUserReviewText('');
+      }
+    } catch (err) {
+      console.error('Error al eliminar reseña:', err);
+    } finally {
+      setIsSubmittingResena(false);
+    }
   };
 
   const copyProfileUrl = () => {
@@ -227,48 +321,43 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
     }
   };
 
-  // Generate real, representative progress bar metrics based on average rating and total votes
-  const getVoteDistribution = (rating: number, totalVotes: number) => {
-    const distribution = [0, 0, 0, 0, 0]; // 5, 4, 3, 2, 1 stars
-    if (totalVotes <= 0) return [0, 0, 0, 0, 0];
+  // Get exact star rating distribution directly from database counter columns or memory reviews
+  const getVoteDistribution = (p: Personaje) => {
+    if (!p.votes_count || p.votes_count <= 0) return [0, 0, 0, 0, 0];
 
-    if (rating >= 4.5) {
-      distribution[0] = Math.round(totalVotes * 0.78); // 5 stars
-      distribution[1] = Math.round(totalVotes * 0.14); // 4 stars
-      distribution[2] = Math.round(totalVotes * 0.05); // 3 stars
-      distribution[3] = Math.round(totalVotes * 0.02); // 2 stars
-      distribution[4] = totalVotes - (distribution[0] + distribution[1] + distribution[2] + distribution[3]); // 1 star
-    } else if (rating >= 3.8) {
-      distribution[0] = Math.round(totalVotes * 0.48); 
-      distribution[1] = Math.round(totalVotes * 0.32); 
-      distribution[2] = Math.round(totalVotes * 0.12); 
-      distribution[3] = Math.round(totalVotes * 0.05); 
-      distribution[4] = totalVotes - (distribution[0] + distribution[1] + distribution[2] + distribution[3]);
-    } else if (rating >= 3.0) {
-      distribution[0] = Math.round(totalVotes * 0.25);
-      distribution[1] = Math.round(totalVotes * 0.25);
-      distribution[2] = Math.round(totalVotes * 0.30);
-      distribution[3] = Math.round(totalVotes * 0.15);
-      distribution[4] = totalVotes - (distribution[0] + distribution[1] + distribution[2] + distribution[3]);
-    } else {
-      distribution[0] = Math.round(totalVotes * 0.10);
-      distribution[1] = Math.round(totalVotes * 0.15);
-      distribution[2] = Math.round(totalVotes * 0.25);
-      distribution[3] = Math.round(totalVotes * 0.35);
-      distribution[4] = totalVotes - (distribution[0] + distribution[1] + distribution[2] + distribution[3]);
+    // 1. Si el personaje ya tiene los contadores persistentes en la base de datos (rendimiento óptimo O(1))
+    if (
+      p.stars_1 !== undefined ||
+      p.stars_2 !== undefined ||
+      p.stars_3 !== undefined ||
+      p.stars_4 !== undefined ||
+      p.stars_5 !== undefined
+    ) {
+      const dbDist = [
+        p.stars_5 || 0,
+        p.stars_4 || 0,
+        p.stars_3 || 0,
+        p.stars_2 || 0,
+        p.stars_1 || 0
+      ];
+      if (dbDist.some(count => count > 0)) {
+        return dbDist;
+      }
     }
 
-    // Ensure no negative values
-    for (let i = 0; i < 5; i++) {
-      if (distribution[i] < 0) distribution[i] = 0;
-    }
-    const sum = distribution.reduce((a, b) => a + b, 0);
-    if (sum !== totalVotes) {
-      distribution[0] += (totalVotes - sum);
-      if (distribution[0] < 0) distribution[0] = 0;
+    // 2. Si tenemos la lista de reseñas cargada en memoria
+    if (resenasList.length > 0) {
+      const distribution = [0, 0, 0, 0, 0]; // 5, 4, 3, 2, 1 estrellas
+      resenasList.forEach(r => {
+        const starIdx = 5 - r.stars;
+        if (starIdx >= 0 && starIdx < 5) {
+          distribution[starIdx]++;
+        }
+      });
+      return distribution;
     }
 
-    return distribution;
+    return [0, 0, 0, 0, 0];
   };
 
   const handleCalculateShip = (e: React.FormEvent) => {
@@ -340,7 +429,7 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
   }
 
   const profileUrl = `${window.location.origin}/personajes/${personaje.slug}`;
-  const voteDist = getVoteDistribution(personaje.rating, personaje.votes_count);
+  const voteDist = getVoteDistribution(personaje);
   const firstLetter = personaje.nombre.trim().charAt(0).toUpperCase();
 
   // Adapting the layout beautifully according to Starryz5 UI / image.png:
@@ -790,7 +879,7 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
                       <span>Nacionalidad</span>
                     </div>
                     <div className="text-zinc-200 font-semibold flex items-center gap-1.5">
-                      <span>{getCountryFlag(personaje.nationality)}</span>
+                      <FlagImage countryName={personaje.nationality} size="md" />
                       <span>{personaje.nationality}</span>
                     </div>
                   </div>
@@ -901,7 +990,7 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
           </div>
         )}
 
-        {/* 2. RESEÑAS TAB (Star ratings summary and submission, identical to mock) */}
+        {/* 2. RESEÑAS TAB (Star ratings summary and submission) */}
         {activeTab === 'resenas' && (
           <div className="space-y-6">
             
@@ -913,7 +1002,7 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
                   Resumen de Estrellas
                 </h3>
                 <span className="text-[10px] bg-yellow-500/10 text-[#ffbf00] border border-yellow-500/20 px-2.5 py-1 rounded-full font-mono font-bold uppercase">
-                  {voteSubmitted ? 'Voto Registrado' : 'Oportunidades: 6/6'}
+                  {voteSubmitted ? 'Reseña Registrada' : 'Deja tu Calificación'}
                 </span>
               </div>
 
@@ -921,7 +1010,7 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
                 {/* Left side big badge */}
                 <div className="md:col-span-4 flex flex-col items-center justify-center text-center p-4 bg-black/20 rounded-xl border border-white/5 space-y-1">
                   <div className="text-4xl sm:text-5xl font-black text-[#ffbf00] font-display">
-                    {personaje.rating.toFixed(1)}
+                    {(personaje.votes_count > 0 ? personaje.rating : 0).toFixed(1)}
                   </div>
                   
                   {/* Rating Stars graphic */}
@@ -930,7 +1019,7 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
                       <Star 
                         key={star} 
                         className={`w-4 h-4 ${
-                          personaje.rating >= star 
+                          personaje.votes_count > 0 && personaje.rating >= star 
                             ? 'fill-[#ffbf00] text-[#ffbf00]' 
                             : 'text-zinc-600'
                         }`} 
@@ -939,7 +1028,7 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
                   </div>
 
                   <div className="text-[10px] text-zinc-400 font-medium pt-1">
-                    {personaje.votes_count} votos totales
+                    {personaje.votes_count || 0} votos totales
                   </div>
                 </div>
 
@@ -964,43 +1053,233 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
                 </div>
               </div>
 
-              {/* Vote input selector area */}
-              <div className="border-t border-white/5 pt-5 text-center space-y-4">
-                <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest">
-                  ¿Conoces a {personaje.nombre}? ¡Deja tu calificación de estrellas!
-                </p>
+              {/* Vote input selector and text area form */}
+              <div className="border-t border-white/5 pt-5 space-y-4">
+                {!voteSubmitted ? (
+                  <form onSubmit={handleSubmitResena} className="space-y-4">
+                    <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest text-center">
+                      ¿Conoces a {personaje.nombre}? ¡Deja tu calificación y reseña!
+                    </p>
 
-                <div className="flex items-center justify-center gap-2">
-                  {[1, 2, 3, 4, 5].map((star) => {
-                    const isFilled = (hoverRating !== null ? hoverRating >= star : (userRating !== null ? userRating >= star : false));
-                    return (
+                    <div className="flex items-center justify-center gap-2">
+                      {[1, 2, 3, 4, 5].map((star) => {
+                        const isFilled = (hoverRating !== null ? hoverRating >= star : (userRating !== null ? userRating >= star : false));
+                        return (
+                          <button
+                            key={star}
+                            type="button"
+                            onMouseEnter={() => setHoverRating(star)}
+                            onMouseLeave={() => setHoverRating(null)}
+                            onClick={() => handleVote(star)}
+                            className="p-1.5 text-zinc-600 hover:text-[#ffbf00] transition-colors"
+                          >
+                            <Star
+                              className={`w-7 h-7 transition-transform ${
+                                isFilled ? 'fill-[#ffbf00] text-[#ffbf00] scale-110' : 'text-zinc-700 border-white/10'
+                              }`}
+                            />
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider">
+                        Escribe tu reseña (Opcional, máximo 500 caracteres)
+                      </label>
+                      <textarea
+                        value={userReviewText}
+                        onChange={(e) => setUserReviewText(e.target.value.substring(0, 500))}
+                        maxLength={500}
+                        rows={3}
+                        placeholder="Escribe lo que opinas de este personaje... ¿Por qué le das esta puntuación?"
+                        className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-[#ffbf00]/50 focus:ring-1 focus:ring-[#ffbf00]/30 transition"
+                      />
+                      <div className="flex justify-between items-center text-[10px] text-zinc-500 font-medium">
+                        <span>{currentUser ? 'Registrado con Google' : 'Modo Invitado (Anónimo)'}</span>
+                        <span>{userReviewText.length} / 500 caracteres</span>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end">
                       <button
-                        key={star}
-                        type="button"
-                        onMouseEnter={() => !voteSubmitted && setHoverRating(star)}
-                        onMouseLeave={() => !voteSubmitted && setHoverRating(null)}
-                        onClick={() => handleVote(star)}
-                        disabled={voteSubmitted}
-                        className="p-1.5 text-zinc-600 hover:text-[#ffbf00] transition-colors disabled:cursor-default"
+                        type="submit"
+                        disabled={userRating === null || isSubmittingResena}
+                        className="px-5 py-2.5 bg-[#ffbf00] hover:bg-[#ffbf00]/90 text-black font-extrabold text-xs uppercase tracking-wider rounded-xl transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 shadow-md shadow-[#ffbf00]/10"
                       >
-                        <Star
-                          className={`w-7 h-7 transition-transform ${
-                            isFilled ? 'fill-[#ffbf00] text-[#ffbf00] scale-110' : 'text-zinc-700 border-white/10'
-                          }`}
-                        />
+                        {isSubmittingResena ? (
+                          <span>Publicando...</span>
+                        ) : (
+                          <>
+                            <MessageSquare className="w-4 h-4" />
+                            <span>Publicar Reseña</span>
+                          </>
+                        )}
                       </button>
-                    );
-                  })}
-                </div>
+                    </div>
+                  </form>
+                ) : (
+                  <div className="bg-yellow-500/5 border border-yellow-500/10 rounded-xl p-4 space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs font-extrabold text-yellow-400 uppercase tracking-wider">
+                        Tu Calificación Registrada
+                      </span>
+                      <button
+                        onClick={handleDeleteResena}
+                        disabled={isSubmittingResena}
+                        className="text-xs text-red-400 hover:text-red-300 transition flex items-center gap-1 font-bold uppercase tracking-wider disabled:opacity-40"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Eliminar Reseña</span>
+                      </button>
+                    </div>
 
-                {voteSubmitted && (
-                  <p className="text-xs font-bold text-emerald-400 animate-pulse">
-                    ¡Calificación registrada correctamente en Graderz5! Gracias por participar.
-                  </p>
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-1 text-xs">
+                        <span className="font-bold text-zinc-300">Puntuación:</span>
+                        <div className="flex items-center gap-0.5">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <Star
+                              key={star}
+                              className={`w-3.5 h-3.5 ${
+                                (userRating || 0) >= star
+                                  ? 'fill-[#ffbf00] text-[#ffbf00]'
+                                  : 'text-zinc-600'
+                              }`}
+                            />
+                          ))}
+                        </div>
+                      </div>
+
+                      {userReviewText && (
+                        <p className="text-sm text-zinc-300 italic pt-1 bg-black/20 p-2.5 rounded-lg border border-white/5">
+                          "{userReviewText}"
+                        </p>
+                      )}
+                    </div>
+                  </div>
                 )}
               </div>
 
             </div>
+
+            {/* Reseñas de la comunidad */}
+            <div className="space-y-4">
+              <h3 className="text-sm font-extrabold uppercase tracking-widest text-zinc-400 flex items-center gap-2">
+                <MessageSquare className="w-4 h-4 text-[#ffbf00]" />
+                <span>Reseñas de la Comunidad ({resenasList.length})</span>
+              </h3>
+
+              {resenasList.length === 0 ? (
+                <div className="bg-[#111116] border border-white/5 rounded-2xl p-8 text-center text-zinc-500">
+                  <p className="text-sm">Aún no hay reseñas de la comunidad para este personaje.</p>
+                  <p className="text-xs pt-1">¡Sé el primero en escribir tu reseña!</p>
+                </div>
+              ) : (
+                <div className="space-y-3.5">
+                  {resenasList.map((resena) => {
+                    const starsArr = Array.from({ length: 5 }, (_, i) => i + 1);
+                    return (
+                      <div 
+                        key={resena.id} 
+                        className="bg-[#111116] border border-white/5 rounded-2xl p-4.5 space-y-3 shadow-md"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/5 pb-2.5">
+                          {/* User info & Metadata badges */}
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs font-extrabold text-white">
+                              {resena.user_name}
+                            </span>
+                            
+                            {/* Reg with icon badge */}
+                            {resena.registered_with === 'google' ? (
+                              <span 
+                                title="Registrado con Google" 
+                                className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-white/10 border border-white/20 shadow-sm"
+                              >
+                                <svg className="w-3 h-3" viewBox="0 0 24 24">
+                                  <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                                  <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                                  <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
+                                  <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/>
+                                </svg>
+                              </span>
+                            ) : (
+                              <span 
+                                title="Usuario Invitado (Anónimo)" 
+                                className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-zinc-800 border border-white/10 text-zinc-400"
+                              >
+                                <UserIcon className="w-2.5 h-2.5" />
+                              </span>
+                            )}
+
+                            {/* Gender icon badge (♂ / ♀) - sin texto */}
+                            {resena.user_gender && (resena.user_gender.toLowerCase() === 'masculino' || resena.user_gender.toLowerCase() === 'hombre') && (
+                              <span 
+                                title="Sexo: Masculino" 
+                                className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-500/20 border border-blue-500/40 text-blue-400 font-bold text-xs"
+                              >
+                                ♂
+                              </span>
+                            )}
+                            {resena.user_gender && (resena.user_gender.toLowerCase() === 'femenino' || resena.user_gender.toLowerCase() === 'mujer') && (
+                              <span 
+                                title="Sexo: Femenino" 
+                                className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-pink-500/20 border border-pink-500/40 text-pink-400 font-bold text-xs"
+                              >
+                                ♀
+                              </span>
+                            )}
+
+                            {/* Country Flag badge - solo la bandera en imagen HD sin texto */}
+                            {resena.user_nationality && resena.user_nationality !== 'No especificada' && (
+                              <span 
+                                title={`País: ${resena.user_nationality}`} 
+                                className="inline-flex items-center justify-center p-0.5 rounded-sm bg-white/5 border border-white/10 shadow-xs"
+                              >
+                                <FlagImage countryName={resena.user_nationality} size="sm" />
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Created date */}
+                          <span className="text-[10px] text-zinc-500 font-mono">
+                            {new Date(resena.created_at).toLocaleDateString('es-ES', {
+                              day: 'numeric',
+                              month: 'short',
+                              year: 'numeric'
+                            })}
+                          </span>
+                        </div>
+
+                        {/* Stars and optional text review */}
+                        <div className="space-y-1.5">
+                          <div className="flex items-center gap-0.5">
+                            {starsArr.map((star) => (
+                              <Star
+                                key={star}
+                                className={`w-3.5 h-3.5 ${
+                                  resena.stars >= star
+                                    ? 'fill-[#ffbf00] text-[#ffbf00]'
+                                    : 'text-zinc-700'
+                                }`}
+                              />
+                            ))}
+                          </div>
+
+                          {resena.review_text && (
+                            <p className="text-sm text-zinc-300 leading-relaxed font-normal whitespace-pre-wrap">
+                              {resena.review_text}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
           </div>
         )}
 

@@ -135,6 +135,7 @@ export default function App() {
         onSignInGoogle={handleSignInGoogle}
         onSignOut={handleSignOut}
         isLoggingIn={isLoggingIn}
+        onGoHome={handleBackFromPersonaje}
       />
 
       {/* Main Content Area */}
@@ -168,15 +169,16 @@ export default function App() {
       </main>
 
       {/* Floating Bottom Dock Navigation */}
-      {!activePersonajeSlug && (
-        <BottomNav
-          activeTab={activeTab}
-          onSelectTab={(tab) => {
-            setActiveTab(tab);
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-          }}
-        />
-      )}
+      <BottomNav
+        activeTab={activePersonajeSlug ? ('none' as any) : activeTab}
+        onSelectTab={(tab) => {
+          if (activePersonajeSlug) {
+            handleBackFromPersonaje();
+          }
+          setActiveTab(tab);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }}
+      />
 
       {/* Floating Square Button to Add Personaje in Bottom Right Corner */}
       <div className="fixed bottom-6 right-6 sm:bottom-8 sm:right-8 z-40">

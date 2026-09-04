@@ -147,7 +147,7 @@ export async function getUserActitudForPersonaje(
         .from('personajes_actitud')
         .select('actitud')
         .eq('personaje_slug', cleanSlug)
-        .eq('user_uid', cleanUid)
+        .or(`user_uid.eq.${cleanUid},uid.eq.${cleanUid}`)
         .maybeSingle();
 
       if (!error && data?.actitud) {
@@ -232,7 +232,7 @@ export async function togglePersonajeActitud(params: {
           .from('personajes_actitud')
           .delete()
           .eq('personaje_slug', cleanSlug)
-          .eq('user_uid', userUid);
+          .or(`user_uid.eq.${userUid},uid.eq.${userUid}`);
       } catch (err) {
         console.warn('Error al eliminar actitud en Supabase:', err);
       }
@@ -274,6 +274,7 @@ export async function togglePersonajeActitud(params: {
               id: recordId,
               personaje_slug: cleanSlug,
               user_uid: userUid,
+              uid: userUid, // Soportar también columna 'uid'
               user_name: newRecord.user_name,
               actitud: targetActitud,
               fecha: fechaStr,
@@ -285,7 +286,7 @@ export async function togglePersonajeActitud(params: {
               personaje_nationality: newRecord.personaje_nationality,
               created_at: newRecord.created_at
             },
-            { onConflict: 'personaje_slug,user_uid' }
+            { onConflict: 'id' }
           );
       } catch (err) {
         console.warn('Error al guardar actitud en Supabase:', err);

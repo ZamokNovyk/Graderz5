@@ -24,7 +24,7 @@ import {
   Briefcase
 } from 'lucide-react';
 import { verifyPersonOnWikipedia, savePersonaje, WikiVerificationResult, createSlug } from '../lib/personajesService';
-import { getCountryFlag } from '../data/countries';
+import { FlagImage } from './FlagImage';
 import { User } from 'firebase/auth';
 import { PersonajeFamiliar } from '../types';
 
@@ -316,7 +316,7 @@ export const AddPersonajeModal: React.FC<AddPersonajeModalProps> = ({
 
                       {result.nationality && (
                         <div className="inline-flex items-center gap-1.5 text-[11px] bg-white/5 border border-white/10 px-2.5 py-0.5 rounded-lg text-zinc-300">
-                          <span>{getCountryFlag(result.nationality)}</span>
+                          <FlagImage countryName={result.nationality} size="sm" />
                           <span className="text-zinc-500">Nacionalidad:</span>
                           <span className="font-semibold text-white">{result.nationality}</span>
                         </div>

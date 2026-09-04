@@ -34,23 +34,59 @@ ALTER TABLE public.personajes ADD COLUMN IF NOT EXISTS count_conozco integer DEF
 ALTER TABLE public.personajes ADD COLUMN IF NOT EXISTS count_fan integer DEFAULT 0;
 ALTER TABLE public.personajes ADD COLUMN IF NOT EXISTS count_simp integer DEFAULT 0;
 ALTER TABLE public.personajes ADD COLUMN IF NOT EXISTS count_hater integer DEFAULT 0;
-ALTER TABLE public.personajes ADD COLUMN IF NOT EXISTS rating numeric DEFAULT 5.0;
-ALTER TABLE public.personajes ADD COLUMN IF NOT EXISTS votes_count integer DEFAULT 1;
+ALTER TABLE public.personajes ADD COLUMN IF NOT EXISTS rating numeric DEFAULT 0.0;
+ALTER TABLE public.personajes ADD COLUMN IF NOT EXISTS votes_count integer DEFAULT 0;
+ALTER TABLE public.personajes ADD COLUMN IF NOT EXISTS stars_1 integer DEFAULT 0;
+ALTER TABLE public.personajes ADD COLUMN IF NOT EXISTS stars_2 integer DEFAULT 0;
+ALTER TABLE public.personajes ADD COLUMN IF NOT EXISTS stars_3 integer DEFAULT 0;
+ALTER TABLE public.personajes ADD COLUMN IF NOT EXISTS stars_4 integer DEFAULT 0;
+ALTER TABLE public.personajes ADD COLUMN IF NOT EXISTS stars_5 integer DEFAULT 0;
+ALTER TABLE public.personajes ADD COLUMN IF NOT EXISTS reviews_count integer DEFAULT 0;
 ALTER TABLE public.personajes ADD COLUMN IF NOT EXISTS created_at timestamptz DEFAULT now();
 
 
 -- 2. TABLA: public.personajes_actitud (Votos de actitudes)
 CREATE TABLE IF NOT EXISTS public.personajes_actitud (
-    id bigserial PRIMARY KEY
+    id text PRIMARY KEY
 );
 
 ALTER TABLE public.personajes_actitud ADD COLUMN IF NOT EXISTS personaje_slug text;
 ALTER TABLE public.personajes_actitud ADD COLUMN IF NOT EXISTS uid text;
+ALTER TABLE public.personajes_actitud ADD COLUMN IF NOT EXISTS user_uid text;
+ALTER TABLE public.personajes_actitud ADD COLUMN IF NOT EXISTS user_name text;
 ALTER TABLE public.personajes_actitud ADD COLUMN IF NOT EXISTS actitud text;
+ALTER TABLE public.personajes_actitud ADD COLUMN IF NOT EXISTS fecha text;
+ALTER TABLE public.personajes_actitud ADD COLUMN IF NOT EXISTS hora text;
+ALTER TABLE public.personajes_actitud ADD COLUMN IF NOT EXISTS is_anonymous boolean DEFAULT false;
+ALTER TABLE public.personajes_actitud ADD COLUMN IF NOT EXISTS user_gender text DEFAULT 'no_especificado';
+ALTER TABLE public.personajes_actitud ADD COLUMN IF NOT EXISTS user_nationality text DEFAULT 'No especificada';
+ALTER TABLE public.personajes_actitud ADD COLUMN IF NOT EXISTS personaje_gender text DEFAULT 'No especificado';
+ALTER TABLE public.personajes_actitud ADD COLUMN IF NOT EXISTS personaje_nationality text DEFAULT 'No especificada';
 ALTER TABLE public.personajes_actitud ADD COLUMN IF NOT EXISTS created_at timestamptz DEFAULT now();
 
 CREATE INDEX IF NOT EXISTS idx_actitud_slug ON public.personajes_actitud(personaje_slug);
 CREATE INDEX IF NOT EXISTS idx_actitud_uid ON public.personajes_actitud(uid);
+CREATE INDEX IF NOT EXISTS idx_actitud_user_uid ON public.personajes_actitud(user_uid);
+
+
+-- 2.5 TABLA: public.personajes_resenas (Reseñas y Calificaciones)
+CREATE TABLE IF NOT EXISTS public.personajes_resenas (
+    id text PRIMARY KEY, -- 'res_' || personaje_slug || '_' || user_uid
+    personaje_slug text NOT NULL,
+    personaje_nombre text,
+    user_uid text NOT NULL,
+    user_name text,
+    user_gender text DEFAULT 'no_especificado',
+    user_nationality text DEFAULT 'No especificada',
+    is_anonymous boolean DEFAULT false,
+    registered_with text DEFAULT 'anonymous', -- 'google' o 'anonymous'
+    review_text text,
+    stars integer NOT NULL,
+    created_at timestamptz DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_resenas_slug ON public.personajes_resenas(personaje_slug);
+CREATE INDEX IF NOT EXISTS idx_resenas_uid ON public.personajes_resenas(user_uid);
 
 
 -- 3. TABLA: public.users (Perfiles y sesiones de usuarios de Google / Firebase)
@@ -75,6 +111,7 @@ ALTER TABLE public.users ADD COLUMN IF NOT EXISTS updated_at timestamptz DEFAULT
 -- 4. HABILITAR ROW LEVEL SECURITY (RLS)
 ALTER TABLE public.personajes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.personajes_actitud ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.personajes_resenas ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 
 
@@ -112,3 +149,18 @@ CREATE POLICY "Cualquiera puede registrar su usuario" ON public.users FOR INSERT
 
 DROP POLICY IF EXISTS "Cualquiera puede actualizar su usuario" ON public.users;
 CREATE POLICY "Cualquiera puede actualizar su usuario" ON public.users FOR UPDATE USING (true);
+
+
+-- Políticas para reseñas (public.personajes_resenas)
+DROP POLICY IF EXISTS "Reseñas son públicas" ON public.personajes_resenas;
+CREATE POLICY "Reseñas son públicas" ON public.personajes_resenas FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Cualquiera puede agregar reseñas" ON public.personajes_resenas;
+CREATE POLICY "Cualquiera puede agregar reseñas" ON public.personajes_resenas FOR INSERT WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Cualquiera puede actualizar sus reseñas" ON public.personajes_resenas;
+CREATE POLICY "Cualquiera puede actualizar sus reseñas" ON public.personajes_resenas FOR UPDATE USING (true);
+
+DROP POLICY IF EXISTS "Cualquiera puede eliminar sus reseñas" ON public.personajes_resenas;
+CREATE POLICY "Cualquiera puede eliminar sus reseñas" ON public.personajes_resenas FOR DELETE USING (true);
+

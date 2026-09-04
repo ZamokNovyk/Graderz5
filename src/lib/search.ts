@@ -480,8 +480,8 @@ export async function searchWithAutocompleteAdvanced(
           image_url: item.image_url,
           birth_date: item.birth_date,
           extract: item.extract,
-          rating: Number(item.rating) || 5.0,
-          votes_count: Number(item.votes_count) || 1,
+          rating: item.rating !== undefined && item.rating !== null ? Number(item.rating) : 0,
+          votes_count: item.votes_count !== undefined && item.votes_count !== null ? Number(item.votes_count) : 0,
           created_at: item.created_at
         }));
         source = 'rpc';
@@ -508,8 +508,8 @@ export async function searchWithAutocompleteAdvanced(
             image_url: item.image_url,
             birth_date: item.birth_date,
             extract: item.extract,
-            rating: Number(item.rating) || 5.0,
-            votes_count: Number(item.votes_count) || 1,
+            rating: item.rating !== undefined && item.rating !== null ? Number(item.rating) : 0,
+            votes_count: item.votes_count !== undefined && item.votes_count !== null ? Number(item.votes_count) : 0,
             created_at: item.created_at
           }));
           source = 'supabase_table';

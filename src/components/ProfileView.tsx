@@ -21,6 +21,7 @@ import { User, updateProfile } from '../lib/firebase';
 import { saveUserToSupabase, checkUsernameAvailability, getUserProfileDetails } from '../users/userService';
 import { getUserPreferences, saveUserPreferences } from '../lib/actitudesService';
 import { ALL_COUNTRIES } from '../data/countries';
+import { CountrySelect } from './CountrySelect';
 
 interface ProfileViewProps {
   currentUser: User | null;
@@ -408,17 +409,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ currentUser, onSignInG
               <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
                 Nacionalidad (País)
               </label>
-              <select
+              <CountrySelect
                 value={nationality}
-                onChange={(e) => setNationality(e.target.value)}
-                className="w-full bg-[#181820] border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-red-500/50 cursor-pointer"
-              >
-                {ALL_COUNTRIES.map((c) => (
-                  <option key={c.code} value={c.name}>
-                    {c.flag} {c.name}
-                  </option>
-                ))}
-              </select>
+                onChange={setNationality}
+              />
             </div>
           </div>
 

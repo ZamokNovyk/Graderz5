@@ -73,6 +73,28 @@ export interface Personaje {
   count_hater?: number;
   rating: number;
   votes_count: number;
+  stars_1?: number;
+  stars_2?: number;
+  stars_3?: number;
+  stars_4?: number;
+  stars_5?: number;
+  reviews_count?: number;
   created_at: string;
 }
+
+export interface PersonajeResena {
+  id: string; // 'res_' || personaje_slug || '_' || user_uid
+  personaje_slug: string;
+  personaje_nombre?: string;
+  user_uid: string;
+  user_name: string;
+  user_gender?: string;
+  user_nationality?: string;
+  is_anonymous: boolean;
+  registered_with: 'google' | 'anonymous';
+  review_text?: string;
+  stars: number;
+  created_at: string;
+}
+
 

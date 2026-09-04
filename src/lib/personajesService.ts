@@ -955,8 +955,14 @@ export async function getPersonajesList(): Promise<Personaje[]> {
           count_fan: item.count_fan !== undefined && item.count_fan !== null ? Number(item.count_fan) : undefined,
           count_simp: item.count_simp !== undefined && item.count_simp !== null ? Number(item.count_simp) : undefined,
           count_hater: item.count_hater !== undefined && item.count_hater !== null ? Number(item.count_hater) : undefined,
-          rating: Number(item.rating) || 5.0,
-          votes_count: Number(item.votes_count) || 1,
+          rating: item.rating !== undefined && item.rating !== null ? Number(item.rating) : 0,
+          votes_count: item.votes_count !== undefined && item.votes_count !== null ? Number(item.votes_count) : 0,
+          stars_1: Number(item.stars_1) || 0,
+          stars_2: Number(item.stars_2) || 0,
+          stars_3: Number(item.stars_3) || 0,
+          stars_4: Number(item.stars_4) || 0,
+          stars_5: Number(item.stars_5) || 0,
+          reviews_count: Number(item.reviews_count) || 0,
           created_at: item.created_at || new Date().toISOString()
         }));
 
@@ -1064,8 +1070,14 @@ export async function getPersonajeBySlug(slug: string): Promise<Personaje | null
           count_fan: data.count_fan !== undefined && data.count_fan !== null ? Number(data.count_fan) : 0,
           count_simp: data.count_simp !== undefined && data.count_simp !== null ? Number(data.count_simp) : 0,
           count_hater: data.count_hater !== undefined && data.count_hater !== null ? Number(data.count_hater) : 0,
-          rating: Number(data.rating) || 5.0,
-          votes_count: Number(data.votes_count) || 1,
+          rating: data.rating !== undefined && data.rating !== null ? Number(data.rating) : 0,
+          votes_count: data.votes_count !== undefined && data.votes_count !== null ? Number(data.votes_count) : 0,
+          stars_1: Number(data.stars_1) || 0,
+          stars_2: Number(data.stars_2) || 0,
+          stars_3: Number(data.stars_3) || 0,
+          stars_4: Number(data.stars_4) || 0,
+          stars_5: Number(data.stars_5) || 0,
+          reviews_count: Number(data.reviews_count) || 0,
           created_at: data.created_at || new Date().toISOString()
         };
 
@@ -1269,8 +1281,14 @@ export async function savePersonaje(
     count_fan: 0,
     count_simp: 0,
     count_hater: 0,
-    rating: 5.0,
-    votes_count: 1,
+    rating: 0.0,
+    votes_count: 0,
+    stars_1: 0,
+    stars_2: 0,
+    stars_3: 0,
+    stars_4: 0,
+    stars_5: 0,
+    reviews_count: 0,
     created_at: new Date().toISOString()
   };
 
@@ -1306,6 +1324,12 @@ export async function savePersonaje(
         count_hater: newPersonaje.count_hater,
         rating: newPersonaje.rating,
         votes_count: newPersonaje.votes_count,
+        stars_1: 0,
+        stars_2: 0,
+        stars_3: 0,
+        stars_4: 0,
+        stars_5: 0,
+        reviews_count: 0,
         created_at: newPersonaje.created_at
       };
 

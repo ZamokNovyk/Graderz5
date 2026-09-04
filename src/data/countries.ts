@@ -204,11 +204,46 @@ export const ALL_COUNTRIES: CountryItem[] = [
   { code: 'ZW', flag: '🇿🇼', name: 'Zimbabue' }
 ];
 
+export function getCountryCode(countryName?: string): string | null {
+  if (!countryName) return null;
+  const clean = countryName.trim().toLowerCase();
+  
+  // Specific common aliases
+  if (clean === 'perú' || clean === 'peru' || clean === 'pe') return 'pe';
+  if (clean === 'estados unidos' || clean === 'ee.uu.' || clean === 'usa' || clean === 'us') return 'us';
+  if (clean === 'méxico' || clean === 'mexico' || clean === 'mx') return 'mx';
+  if (clean === 'españa' || clean === 'spain' || clean === 'es') return 'es';
+  if (clean === 'colombia' || clean === 'co') return 'co';
+  if (clean === 'argentina' || clean === 'ar') return 'ar';
+  if (clean === 'chile' || clean === 'cl') return 'cl';
+  if (clean === 'venezuela' || clean === 've') return 've';
+  if (clean === 'ecuador' || clean === 'ec') return 'ec';
+  if (clean === 'bolivia' || clean === 'bo') return 'bo';
+  if (clean === 'paraguay' || clean === 'py') return 'py';
+  if (clean === 'uruguay' || clean === 'uy') return 'uy';
+  if (clean === 'brasil' || clean === 'brazil' || clean === 'br') return 'br';
+
+  const found = ALL_COUNTRIES.find(c => 
+    c.name.toLowerCase() === clean || 
+    c.code.toLowerCase() === clean ||
+    clean.includes(c.name.toLowerCase()) || 
+    c.name.toLowerCase().includes(clean)
+  );
+  return found ? found.code.toLowerCase() : null;
+}
+
+export function getCountryFlagUrl(countryName?: string): string | null {
+  const code = getCountryCode(countryName);
+  if (!code) return null;
+  return `https://flagcdn.com/w40/${code}.png`;
+}
+
 export function getCountryFlag(countryName?: string): string {
   if (!countryName) return '🌍';
   const clean = countryName.trim().toLowerCase();
   const found = ALL_COUNTRIES.find(c => 
     c.name.toLowerCase() === clean || 
+    c.code.toLowerCase() === clean ||
     clean.includes(c.name.toLowerCase()) || 
     c.name.toLowerCase().includes(clean)
   );

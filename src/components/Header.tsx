@@ -13,6 +13,7 @@ interface HeaderProps {
   onSignInGoogle: () => void;
   onSignOut: () => void;
   isLoggingIn?: boolean;
+  onGoHome?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -25,6 +26,7 @@ export const Header: React.FC<HeaderProps> = ({
   onSignInGoogle,
   onSignOut,
   isLoggingIn,
+  onGoHome,
 }) => {
   const [showUserMenu, setShowUserMenu] = useState(false);
 
@@ -33,6 +35,7 @@ export const Header: React.FC<HeaderProps> = ({
       {/* Brand Logo */}
       <div 
         id="graderz5-logo"
+        onClick={onGoHome}
         className="flex items-center gap-2.5 cursor-pointer select-none group"
       >
         <div className="relative w-10 h-10 rounded-full bg-gradient-to-br from-red-600 via-red-700 to-black p-0.5 shadow-lg shadow-red-950/50 flex items-center justify-center border border-red-500/30 group-hover:scale-105 transition-transform duration-200">
