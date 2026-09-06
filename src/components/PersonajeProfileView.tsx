@@ -48,6 +48,8 @@ import {
 } from '../lib/resenasService';
 import { getCountryFlag } from '../data/countries';
 import { FlagImage } from './FlagImage';
+import { GuardianGlobe } from './GuardianGlobe';
+import { getPersonajeAudience, CountryAudienceStats, GlobeLightPoint } from '../lib/audienceService';
 
 interface PersonajeProfileViewProps {
   slug: string;
@@ -64,7 +66,15 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
   const [isImageLightboxOpen, setIsImageLightboxOpen] = useState(false);
   
   // Interactive Tabs (Default to 'resenas' per user request)
-  const [activeTab, setActiveTab] = useState<'informacion' | 'resenas' | 'ship' | 'estadistica'>('resenas');
+  const [activeTab, setActiveTab] = useState<'informacion' | 'resenas' | 'ship' | 'estadistica' | 'radar'>('resenas');
+
+  // Audience Data for 3D Guardian Globe
+  const [audienceData, setAudienceData] = useState<{
+    stats: CountryAudienceStats[];
+    lights: GlobeLightPoint[];
+    totalVotes: number;
+    dominantCountry: string | null;
+  }>({ stats: [], lights: [], totalVotes: 0, dominantCountry: null });
 
   // Rating and voting state
   const [userRating, setUserRating] = useState<number | null>(null);
@@ -98,6 +108,7 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
     async function loadData() {
       setLoading(true);
       const effectiveUid = currentUser?.uid || getOrCreateGuestUid();
+      let loadedPersonaje: Personaje | null = null;
 
       // 1. CARGA ULTRA-RÁPIDA (Prioridad Principal): Personaje + Reseñas en paralelo
       try {
@@ -106,6 +117,7 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
           getResenasForPersonaje(slug).catch(() => [])
         ]);
 
+        loadedPersonaje = data;
         setPersonaje(data);
         setResenasList(reviews);
 
@@ -135,6 +147,7 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
         simp: realCounts.simp,
         hater: realCounts.hater
       })).catch(() => {});
+      getPersonajeAudience(slug, loadedPersonaje?.nationality).then(aud => setAudienceData(aud)).catch(() => {});
     }
     loadData();
   }, [slug, currentUser]);
@@ -203,6 +216,11 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
 
       setActiveActitud(res.activeActitud);
       setCounts(res.counts);
+
+      // Refresh audience map immediately so the user's vote lights up
+      getPersonajeAudience(personaje.slug, personaje.nationality, true)
+        .then(aud => setAudienceData(aud))
+        .catch(() => {});
     } catch (err) {
       console.error('Error al registrar actitud en base de datos:', err);
     } finally {
@@ -665,10 +683,10 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
       </div>
 
       {/* Tabs Container (Interactive premium bar, similar to mock) */}
-      <div className="bg-[#0e0e13] border border-white/5 rounded-2xl p-1 flex overflow-x-auto gap-1 scrollbar-none max-w-2xl mx-auto">
+      <div className="bg-[#0e0e13] border border-white/5 rounded-2xl p-1 flex overflow-x-auto gap-1 scrollbar-none max-w-3xl mx-auto">
         <button
           onClick={() => setActiveTab('informacion')}
-          className={`flex-1 min-w-[120px] py-3 rounded-xl text-xs font-semibold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+          className={`flex-1 min-w-[105px] py-3 rounded-xl text-xs font-semibold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
             activeTab === 'informacion'
               ? 'text-[#ffbf00] bg-white/5 border border-white/10 shadow-inner'
               : 'text-zinc-400 hover:text-white'
@@ -680,7 +698,7 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
 
         <button
           onClick={() => setActiveTab('resenas')}
-          className={`flex-1 min-w-[120px] py-3 rounded-xl text-xs font-semibold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+          className={`flex-1 min-w-[105px] py-3 rounded-xl text-xs font-semibold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
             activeTab === 'resenas'
               ? 'text-[#ffbf00] bg-white/5 border border-white/10 shadow-inner'
               : 'text-zinc-400 hover:text-white'
@@ -692,7 +710,7 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
 
         <button
           onClick={() => setActiveTab('ship')}
-          className={`flex-1 min-w-[120px] py-3 rounded-xl text-xs font-semibold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+          className={`flex-1 min-w-[105px] py-3 rounded-xl text-xs font-semibold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
             activeTab === 'ship'
               ? 'text-[#ffbf00] bg-white/5 border border-white/10 shadow-inner'
               : 'text-zinc-400 hover:text-white'
@@ -704,7 +722,7 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
 
         <button
           onClick={() => setActiveTab('estadistica')}
-          className={`flex-1 min-w-[120px] py-3 rounded-xl text-xs font-semibold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+          className={`flex-1 min-w-[105px] py-3 rounded-xl text-xs font-semibold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
             activeTab === 'estadistica'
               ? 'text-[#ffbf00] bg-white/5 border border-white/10 shadow-inner'
               : 'text-zinc-400 hover:text-white'
@@ -712,6 +730,18 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
         >
           <BarChart3 className="w-4 h-4" />
           <span>Estadística</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('radar')}
+          className={`flex-1 min-w-[105px] py-3 rounded-xl text-xs font-semibold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+            activeTab === 'radar'
+              ? 'text-[#ffbf00] bg-white/5 border border-white/10 shadow-inner'
+              : 'text-zinc-400 hover:text-white'
+          }`}
+        >
+          <Globe className="w-4 h-4" />
+          <span>Radar</span>
         </button>
       </div>
 
@@ -1409,6 +1439,17 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
 
             </div>
           </div>
+        )}
+
+        {/* 5. RADAR MUNDIAL / GUARDIAN GLOBE TAB */}
+        {activeTab === 'radar' && (
+          <GuardianGlobe
+            stats={audienceData.stats}
+            lights={audienceData.lights}
+            personajeName={personaje.nombre}
+            personajeNationality={personaje.nationality}
+            totalVotes={audienceData.totalVotes}
+          />
         )}
 
       </div>
