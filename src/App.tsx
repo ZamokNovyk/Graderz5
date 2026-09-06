@@ -11,6 +11,7 @@ import { ProfileView } from './components/ProfileView';
 import { BottomNav } from './components/BottomNav';
 import { ItemDetailModal } from './components/ItemDetailModal';
 import { AddPersonajeModal } from './components/AddPersonajeModal';
+import { SearchModal } from './components/SearchModal';
 import { PersonajeProfileView } from './components/PersonajeProfileView';
 import { SearchResultsView } from './components/SearchResultsView';
 import { Check, Plus } from 'lucide-react';
@@ -29,6 +30,7 @@ export default function App() {
   const [activePersonajeSlug, setActivePersonajeSlug] = useState<string | null>(null);
   const [searchQueryParam, setSearchQueryParam] = useState<string | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
 
   // Auth State
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -148,7 +150,7 @@ export default function App() {
       <Header
         searchQuery={searchQuery}
         onSearchChange={handleSearchSubmit}
-        onOpenSearch={() => {}}
+        onOpenSearch={() => setIsSearchModalOpen(true)}
         onSelectPersonaje={handleOpenPersonaje}
         onDownloadApp={handleDownloadApp}
         currentUser={currentUser}
@@ -231,6 +233,21 @@ export default function App() {
         onPersonajeCreated={(slug) => {
           showToast('¡Personaje verificado y guardado en la base de datos!');
           handleOpenPersonaje(slug);
+        }}
+      />
+
+      {/* Interactive Search Floating Window (Modal) for Mobile & Global Search */}
+      <SearchModal
+        isOpen={isSearchModalOpen}
+        onClose={() => setIsSearchModalOpen(false)}
+        onSelectPersonaje={(slug) => {
+          handleOpenPersonaje(slug);
+        }}
+        onSearchSubmit={(query) => {
+          handleSearchSubmit(query);
+        }}
+        onOpenAddPersonaje={() => {
+          setIsAddModalOpen(true);
         }}
       />
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Download, Flame, LogOut, User as UserIcon, LogIn } from 'lucide-react';
+import { Download, Flame, LogOut, User as UserIcon, LogIn, Search } from 'lucide-react';
 import { User } from 'firebase/auth';
 import AutocompleteSearchBar from './AutocompleteSearchBar';
 
@@ -76,6 +76,16 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* Right Action Controls: Unirse Button & Download */}
       <div className="flex items-center gap-3 relative">
+        {/* Mobile Search Button */}
+        <button
+          id="header-mobile-search-btn"
+          onClick={onOpenSearch}
+          title="Buscar personajes"
+          className="md:hidden w-9 h-9 rounded-xl bg-[#141419] border border-white/10 hover:border-red-500/40 hover:bg-[#1c1c24] text-zinc-300 hover:text-red-400 flex items-center justify-center transition-all duration-200 active:scale-95 cursor-pointer"
+        >
+          <Search className="w-4 h-4" />
+        </button>
+
         {/* "Unirse" Button or User Profile pill */}
         {!currentUser ? (
           <button
