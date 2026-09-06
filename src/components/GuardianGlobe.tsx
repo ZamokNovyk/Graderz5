@@ -13,7 +13,10 @@ import {
   Heart, 
   Users, 
   Info,
-  MapPin
+  MapPin,
+  Moon,
+  Sun,
+  Layers
 } from 'lucide-react';
 import { CountryAudienceStats, GlobeLightPoint } from '../lib/audienceService';
 import { latLngToVector3 } from '../data/countryCoordinates';
@@ -27,81 +30,24 @@ const COLOR_MAP: Record<string, string> = {
   home: '#10b981'
 };
 
-// Global singleton texture cache to prevent any re-computation or re-download
-let cachedEarthTexture: THREE.CanvasTexture | null = null;
+// Texture loaders and cached instances from local /public folder
+let cachedDarkTexture: THREE.Texture | null = null;
+let cachedNightTexture: THREE.Texture | null = null;
+const textureLoader = new THREE.TextureLoader();
 
-function getOrCreateEarthTexture(): THREE.CanvasTexture {
-  if (cachedEarthTexture) {
-    return cachedEarthTexture;
-  }
-
-  const canvas = document.createElement('canvas');
-  canvas.width = 1024;
-  canvas.height = 512;
-  const ctx = canvas.getContext('2d');
-  if (ctx) {
-    // Dark oceanic background
-    ctx.fillStyle = '#09090e';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Parallels (Latitude lines)
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
-    ctx.lineWidth = 1;
-    for (let y = 0; y < canvas.height; y += 40) {
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(canvas.width, y);
-      ctx.stroke();
+function getEarthTexture(mode: 'dark' | 'night' = 'dark'): THREE.Texture {
+  if (mode === 'night') {
+    if (!cachedNightTexture) {
+      cachedNightTexture = textureLoader.load('/earth-night.jpg');
+      cachedNightTexture.colorSpace = THREE.SRGBColorSpace;
     }
-
-    // Meridians (Longitude lines)
-    for (let x = 0; x < canvas.width; x += 40) {
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, canvas.height);
-      ctx.stroke();
-    }
-
-    // Equator & Prime Meridian highlight
-    ctx.strokeStyle = 'rgba(249, 115, 22, 0.15)';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(0, canvas.height / 2);
-    ctx.lineTo(canvas.width, canvas.height / 2);
-    ctx.stroke();
-
-    // Stylized glowing dot-matrix for landmasses
-    const landClusters: [number, number, number, number][] = [
-      [150, 60, 160, 100],
-      [200, 160, 100, 60],
-      [260, 260, 80, 130],
-      [480, 80, 100, 80],
-      [490, 170, 110, 150],
-      [600, 80, 240, 130],
-      [800, 140, 90, 100],
-      [820, 310, 100, 70]
-    ];
-
-    ctx.fillStyle = 'rgba(56, 189, 248, 0.22)';
-    landClusters.forEach(([cx, cy, cw, ch]) => {
-      for (let x = cx; x < cx + cw; x += 12) {
-        for (let y = cy; y < cy + ch; y += 12) {
-          const dx = (x - (cx + cw / 2)) / (cw / 2);
-          const dy = (y - (cy + ch / 2)) / (ch / 2);
-          if (dx * dx + dy * dy < 0.95 + (Math.sin(x * y) * 0.15)) {
-            ctx.beginPath();
-            ctx.arc(x, y, 2.2, 0, Math.PI * 2);
-            ctx.fill();
-          }
-        }
-      }
-    });
+    return cachedNightTexture;
   }
-
-  cachedEarthTexture = new THREE.CanvasTexture(canvas);
-  cachedEarthTexture.wrapS = THREE.RepeatWrapping;
-  cachedEarthTexture.wrapT = THREE.ClampToEdgeWrapping;
-  return cachedEarthTexture;
+  if (!cachedDarkTexture) {
+    cachedDarkTexture = textureLoader.load('/earth-dark.jpg');
+    cachedDarkTexture.colorSpace = THREE.SRGBColorSpace;
+  }
+  return cachedDarkTexture;
 }
 
 interface GuardianGlobeProps {
@@ -126,12 +72,14 @@ export const GuardianGlobe: React.FC<GuardianGlobeProps> = ({
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const globeGroupRef = useRef<THREE.Group | null>(null);
+  const earthMeshRef = useRef<THREE.Mesh | null>(null);
   const lightsGroupRef = useRef<THREE.Group | null>(null);
   const animationFrameId = useRef<number | null>(null);
 
   // Interaction State
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'fan' | 'simp' | 'hater' | 'conozco'>('all');
   const [autoRotate, setAutoRotate] = useState(true);
+  const [textureMode, setTextureMode] = useState<'dark' | 'night'>('dark');
   const [hoveredPoint, setHoveredPoint] = useState<GlobeLightPoint | null>(null);
   const [selectedCountryStats, setSelectedCountryStats] = useState<CountryAudienceStats | null>(null);
 
@@ -179,16 +127,16 @@ export const GuardianGlobe: React.FC<GuardianGlobeProps> = ({
     container.innerHTML = '';
     container.appendChild(renderer.domElement);
 
-    // 3. Ambient & Directional Lights
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.85);
+    // 3. Ambient & Directional Lights (Illuminates the continents vividly)
+    const ambientLight = new THREE.AmbientLight(0xffffff, 1.6);
     scene.add(ambientLight);
 
-    const dirLight1 = new THREE.DirectionalLight(0xffffff, 1.2);
-    dirLight1.position.set(100, 80, 100);
+    const dirLight1 = new THREE.DirectionalLight(0xffffff, 1.8);
+    dirLight1.position.set(120, 100, 120);
     scene.add(dirLight1);
 
-    const dirLight2 = new THREE.DirectionalLight(0x38bdf8, 0.6);
-    dirLight2.position.set(-100, -50, -100);
+    const dirLight2 = new THREE.DirectionalLight(0x38bdf8, 0.9);
+    dirLight2.position.set(-120, -60, -120);
     scene.add(dirLight2);
 
     // 4. Master Globe Group
@@ -197,37 +145,48 @@ export const GuardianGlobe: React.FC<GuardianGlobeProps> = ({
     scene.add(globeGroup);
     globeGroupRef.current = globeGroup;
 
-    // 5. In-Memory Procedural Earth Texture (Reused instantly from memory cache)
-    const earthTexture = getOrCreateEarthTexture();
+    // 5. High-Definition Earth Texture (Served locally from /public at 0ms)
+    const earthTexture = getEarthTexture(textureMode);
 
-    // Inner Dark Core Sphere
-    const sphereGeo = new THREE.SphereGeometry(78, 48, 48);
+    // Inner Core Sphere with crisp continents and topography
+    const sphereGeo = new THREE.SphereGeometry(78, 64, 64);
     const sphereMat = new THREE.MeshStandardMaterial({
       map: earthTexture,
-      roughness: 0.8,
-      metalness: 0.2,
-      color: 0x181824
+      roughness: 0.55,
+      metalness: 0.1
     });
     const earthMesh = new THREE.Mesh(sphereGeo, sphereMat);
     globeGroup.add(earthMesh);
+    earthMeshRef.current = earthMesh;
+
+    // Subtle grid wireframe for latitude/longitude celestial lines
+    const gridGeo = new THREE.SphereGeometry(78.2, 36, 24);
+    const gridMat = new THREE.MeshBasicMaterial({
+      color: 0x38bdf8,
+      wireframe: true,
+      transparent: true,
+      opacity: 0.08
+    });
+    const gridMesh = new THREE.Mesh(gridGeo, gridMat);
+    globeGroup.add(gridMesh);
 
     // Glowing Atmosphere Ring
     const atmosphereGeo = new THREE.SphereGeometry(82, 32, 32);
     const atmosphereMat = new THREE.MeshBasicMaterial({
       color: 0x38bdf8,
       transparent: true,
-      opacity: 0.08,
+      opacity: 0.14,
       side: THREE.BackSide
     });
     const atmosphere = new THREE.Mesh(atmosphereGeo, atmosphereMat);
     globeGroup.add(atmosphere);
 
-    // Thin celestial latitude/longitude wireframe ring around globe
+    // Thin celestial latitude/longitude ring around globe
     const ringGeo = new THREE.RingGeometry(86, 87, 64);
     const ringMat = new THREE.MeshBasicMaterial({
       color: 0xf97316,
       transparent: true,
-      opacity: 0.15,
+      opacity: 0.22,
       side: THREE.DoubleSide
     });
     const celestialRing = new THREE.Mesh(ringGeo, ringMat);
@@ -421,6 +380,16 @@ export const GuardianGlobe: React.FC<GuardianGlobeProps> = ({
     globeGroupRef.current.rotation.set(0.25, 0, 0);
   };
 
+  const toggleTextureMode = () => {
+    const nextMode = textureMode === 'dark' ? 'night' : 'dark';
+    setTextureMode(nextMode);
+    if (earthMeshRef.current) {
+      const newTex = getEarthTexture(nextMode);
+      (earthMeshRef.current.material as THREE.MeshStandardMaterial).map = newTex;
+      (earthMeshRef.current.material as THREE.MeshStandardMaterial).needsUpdate = true;
+    }
+  };
+
   return (
     <div className="space-y-6">
       
@@ -566,6 +535,18 @@ export const GuardianGlobe: React.FC<GuardianGlobeProps> = ({
             className="p-2 rounded-xl text-zinc-400 hover:text-white bg-white/5 hover:bg-white/10 transition-all cursor-pointer"
           >
             <RotateCcw className="w-4 h-4" />
+          </button>
+
+          <button
+            onClick={toggleTextureMode}
+            title={textureMode === 'dark' ? 'Cambiar a Mapa Nocturno (Luces de ciudades de la Tierra)' : 'Cambiar a Mapa Topográfico Oscuro'}
+            className="p-2 rounded-xl text-zinc-400 hover:text-white bg-white/5 hover:bg-white/10 transition-all cursor-pointer flex items-center justify-center border-t border-white/5 mt-0.5"
+          >
+            {textureMode === 'dark' ? (
+              <Moon className="w-4 h-4 text-sky-400" />
+            ) : (
+              <Sun className="w-4 h-4 text-amber-400" />
+            )}
           </button>
         </div>
 
