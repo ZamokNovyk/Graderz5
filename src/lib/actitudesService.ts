@@ -1,6 +1,7 @@
 import { ActitudType, PersonajeActitud, Personaje } from '../types';
 import { supabase } from './supabase';
 import { getPersonajeBySlug } from './personajesService';
+import { updatePersonajeWorldVotes } from './personajesWorldService';
 
 const ACTITUDES_STORAGE_KEY = 'graderz5_personajes_actitud';
 const GUEST_UID_KEY = 'graderz5_guest_uid';
@@ -292,6 +293,18 @@ export async function togglePersonajeActitud(params: {
         console.warn('Error al guardar actitud en Supabase:', err);
       }
     }
+  }
+
+  // Sincronizar en la tabla 'personajes_world' (documentos de Fan, SIMP, Hater, Conozco agrupados por país)
+  try {
+    await updatePersonajeWorldVotes({
+      personajeSlug: cleanSlug,
+      userCountry: userInfo.nationality,
+      oldActitud: currentActitud,
+      newActitud: newActiveActitud
+    });
+  } catch (err) {
+    console.warn('Error al actualizar personajes_world:', err);
   }
 
   // 2. Calcular conteos reales directamente de la base de datos (sin inventar datos)

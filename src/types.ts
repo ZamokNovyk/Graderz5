@@ -97,6 +97,15 @@ export interface PersonajeResena {
   created_at: string;
 }
 
+export interface PersonajeWorldRecord {
+  id: string; // e.g. 'lalisa.manobal_fan'
+  personaje_slug: string;
+  actitud: 'fan' | 'simp' | 'hater' | 'conozco';
+  paises: Record<string, number>; // e.g. { "Perú": 15, "Chile": 34, "México": 8 }
+  total: number;
+  updated_at?: string;
+}
+
 declare module 'globe.gl';
 
 

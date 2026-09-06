@@ -93,4 +93,17 @@ export const supabase = (supabaseUrl && supabaseAnonKey)
  * CREATE INDEX IF NOT EXISTS personajes_actitud_uid_idx ON public.personajes_actitud (user_uid);
  * ALTER TABLE public.personajes_actitud ENABLE ROW LEVEL SECURITY;
  * CREATE POLICY "Permitir lectura y escritura de actitudes" ON public.personajes_actitud FOR ALL USING (true) WITH CHECK (true);
+ * 
+ * -- 4. TABLA 'personajes_world' (Estadísticas mundiales agrupadas: 4 registros por personaje)
+ * CREATE TABLE IF NOT EXISTS public.personajes_world (
+ *   id TEXT PRIMARY KEY, -- Formato: 'slug_actitud', ej: 'lalisa.manobal_fan'
+ *   personaje_slug TEXT NOT NULL,
+ *   actitud TEXT NOT NULL CHECK (actitud IN ('fan', 'simp', 'hater', 'conozco')),
+ *   paises JSONB NOT NULL DEFAULT '{}'::jsonb, -- e.g. {"Peru": 15, "Chile": 34}
+ *   total INTEGER NOT NULL DEFAULT 0,
+ *   updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+ * );
+ * CREATE INDEX IF NOT EXISTS personajes_world_slug_idx ON public.personajes_world (personaje_slug);
+ * ALTER TABLE public.personajes_world ENABLE ROW LEVEL SECURITY;
+ * CREATE POLICY "Permitir lectura y escritura de personajes_world" ON public.personajes_world FOR ALL USING (true) WITH CHECK (true);
  */

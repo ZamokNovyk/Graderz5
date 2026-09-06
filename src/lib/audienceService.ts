@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 import { ActitudType, PersonajeActitud } from '../types';
 import { getCountryCoordinates, latLngToVector3 } from '../data/countryCoordinates';
+import { getPersonajeWorldRecords, syncPersonajeWorldFromActitudes } from './personajesWorldService';
 
 export interface CountryAudienceStats {
   country: string;
@@ -86,41 +87,17 @@ export async function getPersonajeAudience(
     }
   }
 
-  const rawAttitudes: { actitud: string; user_nationality?: string; user_name?: string }[] = [];
+  // 1. Obtener los 4 documentos de personajes_world (Fan, SIMP, Hater, Conozco)
+  let worldDocs = await getPersonajeWorldRecords(cleanSlug);
+  let totalWorldVotes = worldDocs.fan.total + worldDocs.simp.total + worldDocs.hater.total + worldDocs.conozco.total;
 
-  // 1. Fetch from Supabase if connected
-  if (supabase) {
-    try {
-      const { data, error } = await supabase
-        .from('personajes_actitud')
-        .select('actitud, user_nationality, user_name')
-        .eq('personaje_slug', cleanSlug);
-
-      if (!error && Array.isArray(data)) {
-        rawAttitudes.push(...data);
-      }
-    } catch (e) {
-      console.warn('Error reading audience data from Supabase:', e);
+  // Si no hay votos registrados en personajes_world, intentar sincronizar desde personajes_actitud
+  if (totalWorldVotes === 0 && supabase) {
+    const synced = await syncPersonajeWorldFromActitudes(cleanSlug);
+    if (synced) {
+      worldDocs = synced;
+      totalWorldVotes = worldDocs.fan.total + worldDocs.simp.total + worldDocs.hater.total + worldDocs.conozco.total;
     }
-  }
-
-  // 2. Also incorporate local attitudes
-  try {
-    const raw = localStorage.getItem('graderz5_personajes_actitud');
-    if (raw) {
-      const localList: PersonajeActitud[] = JSON.parse(raw);
-      const matched = localList.filter(a => a.personaje_slug.toLowerCase() === cleanSlug);
-      for (const item of matched) {
-        // Avoid exact duplicate if already loaded from DB
-        rawAttitudes.push({
-          actitud: item.actitud,
-          user_nationality: item.user_nationality,
-          user_name: item.user_name
-        });
-      }
-    }
-  } catch {
-    // Ignore local read errors
   }
 
   // Group by country
@@ -130,47 +107,76 @@ export async function getPersonajeAudience(
     simp: number;
     hater: number;
     conozco: number;
-    users: { name?: string; actitud: string }[];
   }> = {};
 
   let totalValidVotes = 0;
 
-  for (const item of rawAttitudes) {
-    const rawCountry = item.user_nationality;
-    if (!rawCountry || rawCountry === 'No especificada' || rawCountry === 'todos') {
-      continue;
+  // Poblar desde los documentos globales de personajes_world
+  const allCountries = new Set<string>([
+    ...Object.keys(worldDocs.fan.paises || {}),
+    ...Object.keys(worldDocs.simp.paises || {}),
+    ...Object.keys(worldDocs.hater.paises || {}),
+    ...Object.keys(worldDocs.conozco.paises || {})
+  ]);
+
+  for (const rawCountry of allCountries) {
+    const coords = getCountryCoordinates(rawCountry);
+    const canonicalName = coords ? coords.name : rawCountry;
+
+    if (!countryMap[canonicalName]) {
+      countryMap[canonicalName] = {
+        total: 0,
+        fan: 0,
+        simp: 0,
+        hater: 0,
+        conozco: 0
+      };
     }
 
-    // Support compound countries like "Japón / Corea del Sur"
-    const countryParts = rawCountry.split(/[/,;]/).map(c => c.trim()).filter(Boolean);
-    for (const part of countryParts) {
-      const coords = getCountryCoordinates(part);
-      const canonicalName = coords ? coords.name : part;
+    const fanCount = worldDocs.fan.paises[rawCountry] || 0;
+    const simpCount = worldDocs.simp.paises[rawCountry] || 0;
+    const haterCount = worldDocs.hater.paises[rawCountry] || 0;
+    const conozcoCount = worldDocs.conozco.paises[rawCountry] || 0;
 
-      if (!countryMap[canonicalName]) {
-        countryMap[canonicalName] = {
-          total: 0,
-          fan: 0,
-          simp: 0,
-          hater: 0,
-          conozco: 0,
-          users: []
-        };
+    countryMap[canonicalName].fan += fanCount;
+    countryMap[canonicalName].simp += simpCount;
+    countryMap[canonicalName].hater += haterCount;
+    countryMap[canonicalName].conozco += conozcoCount;
+
+    const countryTotal = fanCount + simpCount + haterCount + conozcoCount;
+    countryMap[canonicalName].total += countryTotal;
+    totalValidVotes += countryTotal;
+  }
+
+  // 2. Si personajes_world aún no tenía datos (caso inicial o fallback), revisar actitudes locales
+  if (totalValidVotes === 0) {
+    try {
+      const raw = localStorage.getItem('graderz5_personajes_actitud');
+      if (raw) {
+        const localList: PersonajeActitud[] = JSON.parse(raw);
+        const matched = localList.filter(a => a.personaje_slug.toLowerCase() === cleanSlug);
+        for (const item of matched) {
+          const rawCountry = item.user_nationality;
+          if (!rawCountry || rawCountry === 'No especificada' || rawCountry === 'todos') continue;
+
+          const coords = getCountryCoordinates(rawCountry);
+          const canonicalName = coords ? coords.name : rawCountry;
+
+          if (!countryMap[canonicalName]) {
+            countryMap[canonicalName] = { total: 0, fan: 0, simp: 0, hater: 0, conozco: 0 };
+          }
+          countryMap[canonicalName].total++;
+          totalValidVotes++;
+
+          const act = item.actitud?.toLowerCase();
+          if (act === 'fan') countryMap[canonicalName].fan++;
+          else if (act === 'simp') countryMap[canonicalName].simp++;
+          else if (act === 'hater') countryMap[canonicalName].hater++;
+          else if (act === 'conozco') countryMap[canonicalName].conozco++;
+        }
       }
-
-      countryMap[canonicalName].total++;
-      totalValidVotes++;
-
-      const act = item.actitud?.toLowerCase();
-      if (act === 'fan') countryMap[canonicalName].fan++;
-      else if (act === 'simp') countryMap[canonicalName].simp++;
-      else if (act === 'hater') countryMap[canonicalName].hater++;
-      else if (act === 'conozco') countryMap[canonicalName].conozco++;
-
-      countryMap[canonicalName].users.push({
-        name: item.user_name,
-        actitud: act
-      });
+    } catch {
+      // Ignorar fallback local
     }
   }
 
@@ -238,24 +244,29 @@ export async function getPersonajeAudience(
       isHomeCountry: Boolean(personajeNationality && personajeNationality.toLowerCase().includes(countryName.toLowerCase()))
     });
 
-    // Generate Guardian-style points with natural dispersion across the country
-    data.users.forEach((user, idx) => {
-      const pointLat = generateJitter(lat, jitterMax, seedIndex++);
-      const pointLng = generateJitter(lng, jitterMax, seedIndex * 1.5);
-      const actType = (user.actitud as 'fan' | 'simp' | 'hater' | 'conozco') || 'fan';
-
-      lights.push({
-        id: `light-${countryName}-${idx}`,
-        country: countryName,
-        lat: pointLat,
-        lng: pointLng,
-        type: actType,
-        color: COLOR_MAP[actType] || COLOR_MAP.fan,
-        intensity: 1.2,
-        size: 0.08,
-        userName: user.name
-      });
-    });
+    // Generate Guardian-style points with natural dispersion across the country based on counts
+    const actitudTypes: ('fan' | 'simp' | 'hater' | 'conozco')[] = ['fan', 'simp', 'hater', 'conozco'];
+    for (const actType of actitudTypes) {
+      const count = data[actType];
+      if (count <= 0) continue;
+      // Emit points proportionally (up to 12 points per category per country for crisp rendering)
+      const pointsToEmit = Math.min(count, 12);
+      for (let i = 0; i < pointsToEmit; i++) {
+        const pointLat = generateJitter(lat, jitterMax, seedIndex++);
+        const pointLng = generateJitter(lng, jitterMax, seedIndex * 1.5);
+        lights.push({
+          id: `light-${countryName}-${actType}-${i}`,
+          country: countryName,
+          lat: pointLat,
+          lng: pointLng,
+          type: actType,
+          color: COLOR_MAP[actType] || COLOR_MAP.fan,
+          intensity: 1.2,
+          size: 0.08,
+          userName: `${count} ${actType === 'fan' ? 'Fans' : actType === 'simp' ? 'SIMPs' : actType === 'hater' ? 'Haters' : 'Audiencia'} en ${countryName}`
+        });
+      }
+    }
   }
 
   // Sort stats by total votes descending
