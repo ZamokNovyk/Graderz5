@@ -228,6 +228,7 @@ export async function saveResena(params: {
 
 /**
  * Elimina la reseña de un usuario para un personaje y recalcula el rating promedio.
+ * Elimina en cascada todas las respuestas y reacciones (like/dislike) asociadas tanto en Supabase como en local.
  */
 export async function deleteResena(
   personajeSlug: string,
@@ -237,18 +238,60 @@ export async function deleteResena(
   const cleanUid = userUid.trim();
   const id = `res_${cleanSlug}_${cleanUid}`;
 
-  // 1. Eliminar localmente
-  const localList = getLocalResenas();
-  const filtered = localList.filter(r => r.id !== id);
-  saveLocalResenas(filtered);
+  return deleteResenaById(id, cleanSlug);
+}
 
-  // 2. Eliminar en Supabase
+/**
+ * Elimina un Starpost por su ID específico, eliminando en cascada:
+ * - Todas las respuestas en starposts_respuestas
+ * - Todas las reacciones en resenas_like_dislike
+ * - El registro en personajes_resenas
+ * y recalculando las estadísticas del personaje.
+ */
+export async function deleteResenaById(
+  starpostId: string,
+  personajeSlug?: string
+): Promise<boolean> {
+  const cleanId = starpostId.trim();
+  if (!cleanId) return false;
+
+  // 1. Local: obtener slug si no viene dado
+  const localList = getLocalResenas();
+  const target = localList.find(r => r.id === cleanId);
+  const cleanSlug = (personajeSlug || target?.personaje_slug || '').toLowerCase().trim();
+
+  // 1a. Eliminar de reseñas locales
+  const filteredResenas = localList.filter(r => r.id !== cleanId);
+  saveLocalResenas(filteredResenas);
+
+  // 1b. Eliminar respuestas locales asociadas
+  const localReplies = getLocalReplies().filter(r => r.starpost_id !== cleanId);
+  saveLocalReplies(localReplies);
+
+  // 1c. Eliminar reacciones locales asociadas (likes y dislikes)
+  const localReactions = getLocalReactions().filter(r => r.resena_id !== cleanId);
+  saveLocalReactions(localReactions);
+
+  // 2. Supabase: Eliminación en Cascada
   if (supabase) {
     try {
+      // 2a. Eliminar respuestas hijas asociadas al Starpost
+      await supabase
+        .from('starposts_respuestas')
+        .delete()
+        .eq('starpost_id', cleanId);
+
+      // 2b. Eliminar reacciones (like/dislike) asociadas al Starpost
+      await supabase
+        .from('resenas_like_dislike')
+        .delete()
+        .eq('resena_id', cleanId);
+
+      // 2c. Eliminar el Starpost de personajes_resenas
       const { error } = await supabase
         .from('personajes_resenas')
         .delete()
-        .eq('id', id);
+        .eq('id', cleanId);
 
       if (error) {
         console.error('Error al eliminar reseña de Supabase:', error);
@@ -258,8 +301,10 @@ export async function deleteResena(
     }
   }
 
-  // 3. Recalcular y actualizar rating
-  await updatePersonajeRatingStats(cleanSlug);
+  // 3. Recalcular y actualizar rating promedio del personaje
+  if (cleanSlug) {
+    await updatePersonajeRatingStats(cleanSlug);
+  }
 
   return true;
 }

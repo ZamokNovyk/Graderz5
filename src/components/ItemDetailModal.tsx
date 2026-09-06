@@ -72,7 +72,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({ item, onClose 
                 {item.category}
               </span>
               {item.badge && (
-                <span className="text-xs font-medium text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full flex items-center gap-1">
+                <span className="text-xs font-medium text-red-400 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded-full flex items-center gap-1">
                   <Flame className="w-3 h-3" />
                   {item.badge}
                 </span>
@@ -91,7 +91,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({ item, onClose 
         <div className="bg-[#17171e] border border-white/5 rounded-xl p-4 mb-5 flex items-center justify-around text-center">
           <div>
             <div className="text-3xl font-black text-white font-display flex items-center justify-center gap-1">
-              <Star className="w-6 h-6 fill-red-500 text-red-500" />
+              <Star className="w-6 h-6 fill-[#ffbf00] text-[#ffbf00]" />
               <span>{item.rating.toFixed(1)}</span>
             </div>
             <div className="text-[11px] text-zinc-400 mt-1 uppercase font-semibold">Calificación General</div>
@@ -139,7 +139,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({ item, onClose 
             <span className="text-white font-semibold">98%</span>
           </div>
           <div className="w-full bg-zinc-800/60 rounded-full h-2 overflow-hidden">
-            <div className="bg-gradient-to-r from-red-600 to-amber-500 h-full rounded-full w-[98%]"></div>
+            <div className="bg-gradient-to-r from-red-700 to-red-500 h-full rounded-full w-[98%]"></div>
           </div>
         </div>
 

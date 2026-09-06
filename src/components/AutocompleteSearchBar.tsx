@@ -289,7 +289,7 @@ export default function AutocompleteSearchBar({
   const renderBadge = (type: SearchSuggestion['type'], isFuzzy = false) => {
     if (isFuzzy) {
       return (
-        <span className="px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/40 text-amber-400 text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5">
+        <span className="px-2.5 py-1 rounded-lg bg-red-500/10 border border-red-500/40 text-red-400 text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5">
           {type === 'cantante' ? (
             <Music className="w-3.5 h-3.5" />
           ) : type === 'deportista' ? (
@@ -329,7 +329,7 @@ export default function AutocompleteSearchBar({
       case 'personaje':
       default:
         return (
-          <span className="px-2.5 py-1 rounded-md bg-amber-500/15 border border-amber-500/30 text-amber-400 text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
+          <span className="px-2.5 py-1 rounded-md bg-red-500/15 border border-red-500/30 text-red-400 text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
             <UserCheck className="w-3 h-3" />
             Q5 VERIFICADO
           </span>
@@ -481,14 +481,14 @@ export default function AutocompleteSearchBar({
                     </>
                   ) : searchResponse.hasFuzzyOnly ? (
                     <>
-                      <AlertCircle className="w-3.5 h-3.5 text-amber-400" />
-                      <span className="text-amber-300 font-semibold">
+                      <AlertCircle className="w-3.5 h-3.5 text-red-400" />
+                      <span className="text-red-300 font-semibold">
                         Sugerencia inteligente por aproximación
                       </span>
                     </>
                   ) : (
                     <>
-                      <Zap className="w-3 h-3 text-amber-400 fill-amber-400/20" />
+                      <Zap className="w-3 h-3 text-red-400 fill-red-400/20" />
                       <span className="text-zinc-300 font-semibold">
                         {searchResponse.source === 'rpc' ? 'Supabase RPC Stored Procedure' : 'Supabase Instant Database'}
                       </span>
@@ -510,7 +510,7 @@ export default function AutocompleteSearchBar({
                     <div key={group.category} className="space-y-1.5">
                       {/* Section header */}
                       <div className="px-2.5 pt-1 text-[10px] font-bold uppercase tracking-wider text-zinc-500 flex items-center gap-1.5">
-                        <span className={`w-1.5 h-1.5 rounded-full ${searchResponse.hasFuzzyOnly ? 'bg-amber-400' : 'bg-red-500'}`}></span>
+                        <span className={`w-1.5 h-1.5 rounded-full ${searchResponse.hasFuzzyOnly ? 'bg-red-400' : 'bg-red-500'}`}></span>
                         <span>{group.category}</span>
                         <span className="text-zinc-600 font-normal">({group.items.length})</span>
                       </div>
@@ -522,7 +522,7 @@ export default function AutocompleteSearchBar({
                           const isSelected = globalIdx === selectedIndex;
                           const isFuzzy = Boolean(item.isFuzzy);
 
-                          // EXACT DESIGN FROM IMAGE 3 FOR "Quizás quisiste decir"
+                          // EXACT DESIGN FOR "Quizás quisiste decir" (Red & Black with Yellow Star)
                           if (isFuzzy) {
                             return (
                               <div
@@ -531,8 +531,8 @@ export default function AutocompleteSearchBar({
                                 onMouseEnter={() => setSelectedIndex(globalIdx)}
                                 className={`flex items-center justify-between gap-3.5 p-3 rounded-xl cursor-pointer transition-all duration-200 border ${
                                   isSelected 
-                                    ? 'bg-[#221b08] border-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.25)] ring-1 ring-amber-400/50' 
-                                    : 'bg-[#151307] border-amber-500/60 hover:bg-[#1c1808] hover:border-amber-400'
+                                    ? 'bg-red-950/40 border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.25)] ring-1 ring-red-500/50' 
+                                    : 'bg-[#151010] border-red-500/40 hover:bg-red-950/20 hover:border-red-500'
                                 }`}
                               >
                                 {/* Left: Avatar & Title + Quizás quisiste decir */}
@@ -541,24 +541,24 @@ export default function AutocompleteSearchBar({
                                     <img
                                       src={item.avatarUrl}
                                       alt={item.title}
-                                      className="w-10 h-10 rounded-full object-cover border border-amber-500/50 flex-shrink-0"
+                                      className="w-10 h-10 rounded-full object-cover border border-red-500/40 flex-shrink-0"
                                       referrerPolicy="no-referrer"
                                     />
                                   ) : (
-                                    <div className="w-10 h-10 rounded-full bg-amber-950/50 border border-amber-500/40 flex items-center justify-center text-amber-400 flex-shrink-0">
-                                      <UserCheck className="w-5 h-5 text-amber-400" />
+                                    <div className="w-10 h-10 rounded-full bg-red-950/50 border border-red-500/40 flex items-center justify-center text-red-400 flex-shrink-0">
+                                      <UserCheck className="w-5 h-5 text-red-400" />
                                     </div>
                                   )}
 
                                   <div className="min-w-0 flex-1">
                                     <div className="flex items-center gap-2 flex-wrap">
-                                      <span className="text-xs sm:text-sm font-black text-amber-400 uppercase tracking-wide truncate">
+                                      <span className="text-xs sm:text-sm font-black text-white uppercase tracking-wide truncate">
                                         {item.title}
                                       </span>
 
-                                      {/* "Quizás quisiste decir" badge as in Image 3 */}
-                                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-500/15 border border-amber-500/40 text-amber-300">
-                                        <AlertCircle className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+                                      {/* "Quizás quisiste decir" badge */}
+                                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-red-500/15 border border-red-500/40 text-red-300">
+                                        <AlertCircle className="w-3.5 h-3.5 text-red-400 flex-shrink-0" />
                                         Quizás quisiste decir
                                       </span>
                                     </div>
@@ -573,8 +573,8 @@ export default function AutocompleteSearchBar({
 
                                 {/* Right: Category badge & Rating */}
                                 <div className="flex items-center gap-2.5 flex-shrink-0">
-                                  <div className="flex items-center gap-1 bg-black/50 border border-amber-500/30 px-2 py-1 rounded-md text-xs text-amber-400 font-bold">
-                                    <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                                  <div className="flex items-center gap-1 bg-black/50 border border-white/10 px-2 py-1 rounded-md text-xs text-zinc-200 font-bold">
+                                    <Star className="w-3.5 h-3.5 fill-[#ffbf00] text-[#ffbf00]" />
                                     <span>{item.rating.toFixed(1)}</span>
                                   </div>
 
@@ -582,7 +582,7 @@ export default function AutocompleteSearchBar({
                                     {renderBadge(item.type, true)}
                                   </div>
 
-                                  <ArrowRight className={`w-4 h-4 text-amber-500/70 transition-transform ${isSelected ? 'translate-x-1 text-amber-300' : ''}`} />
+                                  <ArrowRight className={`w-4 h-4 text-red-500/70 transition-transform ${isSelected ? 'translate-x-1 text-red-300' : ''}`} />
                                 </div>
                               </div>
                             );
@@ -619,7 +619,7 @@ export default function AutocompleteSearchBar({
                                         ) : item.type === 'politico' ? (
                                           <Crown className="w-4 h-4 text-purple-400" />
                                         ) : (
-                                          <Sparkles className="w-4 h-4 text-amber-400" />
+                                          <Sparkles className="w-4 h-4 text-red-400" />
                                         )}
                                       </div>
                                     )}
@@ -660,8 +660,8 @@ export default function AutocompleteSearchBar({
 
                               {/* Right: Badge & Rating */}
                               <div className="flex items-center gap-2 flex-shrink-0">
-                                <div className="flex items-center gap-1 bg-black/40 border border-white/5 px-2 py-0.5 rounded text-[11px] text-amber-400 font-bold">
-                                  <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                                <div className="flex items-center gap-1 bg-black/40 border border-white/5 px-2 py-0.5 rounded text-[11px] text-zinc-200 font-bold">
+                                  <Star className="w-3 h-3 fill-[#ffbf00] text-[#ffbf00]" />
                                   <span>{item.rating.toFixed(1)}</span>
                                 </div>
                                 <div className="hidden sm:block">
@@ -715,7 +715,7 @@ export default function AutocompleteSearchBar({
                 className="px-4 py-2.5 bg-[#0e0e13] border-t border-white/5 flex items-center justify-between text-[11px] text-zinc-400 hover:text-white hover:bg-white/5 cursor-pointer transition-colors"
               >
                 <div className="flex items-center gap-2">
-                  <Search className="w-3.5 h-3.5 text-amber-500" />
+                  <Search className="w-3.5 h-3.5 text-red-500" />
                   <span>Ver todos los resultados para &quot;<strong>{query}</strong>&quot;</span>
                 </div>
                 <span className="text-[10px] bg-zinc-800 px-1.5 py-0.5 rounded text-zinc-300 font-mono">

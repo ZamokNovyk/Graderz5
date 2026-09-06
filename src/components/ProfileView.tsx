@@ -26,7 +26,8 @@ import {
   ChevronRight,
   Info,
   ThumbsUp,
-  ThumbsDown
+  ThumbsDown,
+  Trash2
 } from 'lucide-react';
 import { User, updateProfile } from '../lib/firebase';
 import { saveUserToSupabase, checkUsernameAvailability, getUserProfileDetails } from '../users/userService';
@@ -40,9 +41,11 @@ import {
   getUserAllResenas, 
   getUserReactionsForStarposts, 
   toggleStarpostReaction,
-  getRepliesCountsForStarposts
+  getRepliesCountsForStarposts,
+  deleteResenaById
 } from '../lib/resenasService';
 import { StarpostRepliesModal } from './StarpostRepliesModal';
+import { ConfirmDeleteModal } from './ConfirmDeleteModal';
 import { getPersonajesList } from '../lib/personajesService';
 import { Personaje, PersonajeActitud, PersonajeResena, ActitudType, StarpostReactionType } from '../types';
 import { ALL_COUNTRIES } from '../data/countries';
@@ -98,6 +101,22 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   const [personajesMap, setPersonajesMap] = useState<Record<string, Personaje>>({});
   const [isLoadingInteractions, setIsLoadingInteractions] = useState(false);
   const [isLoadingResenas, setIsLoadingResenas] = useState(false);
+  const [starpostToDelete, setStarpostToDelete] = useState<PersonajeResena | null>(null);
+  const [isDeletingStarpost, setIsDeletingStarpost] = useState(false);
+
+  const handleConfirmDeleteStarpost = async () => {
+    if (!starpostToDelete) return;
+    setIsDeletingStarpost(true);
+    try {
+      await deleteResenaById(starpostToDelete.id, starpostToDelete.personaje_slug);
+      setResenas(prev => prev.filter(r => r.id !== starpostToDelete.id));
+      setStarpostToDelete(null);
+    } catch (err) {
+      console.error('Error al eliminar Starpost:', err);
+    } finally {
+      setIsDeletingStarpost(false);
+    }
+  };
 
   const effectiveUid = currentUser?.uid || getOrCreateGuestUid();
 
@@ -992,13 +1011,23 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                         </div>
                       </div>
 
-                      {/* Date */}
-                      <span className="text-[11px] text-zinc-500 font-mono">
-                        {formatDateShort(resena.created_at)}
-                      </span>
+                      {/* Date and Delete Button */}
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] text-zinc-500 font-mono">
+                          {formatDateShort(resena.created_at)}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setStarpostToDelete(resena)}
+                          className="text-zinc-500 hover:text-red-400 p-1 rounded-md hover:bg-red-500/10 transition cursor-pointer"
+                          title="Eliminar este Starpost"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
 
-                    {/* Middle: Stars Rating */}
+                    {/* Middle: Stars Rating (SOLO ESTRELLAS EN AMARILLO) */}
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1">
                         {[1, 2, 3, 4, 5].map((star) => (
@@ -1006,7 +1035,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                             key={star}
                             className={`w-4 h-4 ${
                               resena.stars >= star
-                                ? 'text-red-500 fill-red-500'
+                                ? 'text-[#ffbf00] fill-[#ffbf00]'
                                 : 'text-zinc-700'
                             }`}
                           />
@@ -1034,7 +1063,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                       <button
                         type="button"
                         onClick={() => setActiveReplyStarpost(resena)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-zinc-400 hover:text-[#ffbf00] hover:bg-[#ffbf00]/10 border border-transparent hover:border-[#ffbf00]/20 transition cursor-pointer"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-zinc-400 hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition cursor-pointer"
                         title="Ver respuestas a este Starpost"
                       >
                         <MessageSquare className="w-3.5 h-3.5" />
@@ -1114,8 +1143,22 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             setRepliesCountMap(prev => ({ ...prev, [starpostId]: newCount }));
             setResenas(prev => prev.map(r => r.id === starpostId ? { ...r, replies_count: newCount } : r));
           }}
+          onStarpostDeleted={(deletedId) => {
+            setResenas(prev => prev.filter(r => r.id !== deletedId));
+            setActiveReplyStarpost(null);
+          }}
         />
       )}
+
+      {/* MODAL DE CONFIRMACIÓN DE ELIMINACIÓN DE STARPOST */}
+      <ConfirmDeleteModal
+        isOpen={!!starpostToDelete}
+        title="¿Eliminar tu Starpost?"
+        message="¿Estás seguro de que deseas eliminar tu Starpost? Se eliminará definitivamente de la base de datos junto con todas sus respuestas y reacciones asociadas."
+        isDeleting={isDeletingStarpost}
+        onConfirm={handleConfirmDeleteStarpost}
+        onClose={() => !isDeletingStarpost && setStarpostToDelete(null)}
+      />
     </div>
   );
 };

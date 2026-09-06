@@ -52,6 +52,7 @@ import {
   getRepliesCountsForStarposts
 } from '../lib/resenasService';
 import { StarpostRepliesModal } from './StarpostRepliesModal';
+import { ConfirmDeleteModal } from './ConfirmDeleteModal';
 import { getCountryFlag } from '../data/countries';
 import { FlagImage } from './FlagImage';
 import { GuardianGlobe } from './GuardianGlobe';
@@ -95,6 +96,7 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
   const [isTogglingReaction, setIsTogglingReaction] = useState<Record<string, boolean>>({});
   const [activeReplyStarpost, setActiveReplyStarpost] = useState<PersonajeResena | null>(null);
   const [repliesCountMap, setRepliesCountMap] = useState<Record<string, number>>({});
+  const [isConfirmDeleteStarpostOpen, setIsConfirmDeleteStarpostOpen] = useState(false);
 
   // Ship Calculator State
   const [shipTargetSlug, setShipTargetSlug] = useState<string>('');
@@ -313,6 +315,7 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
         setUserRating(null);
         setVoteSubmitted(false);
         setUserReviewText('');
+        setIsConfirmDeleteStarpostOpen(false);
       }
     } catch (err) {
       console.error('Error al eliminar reseña:', err);
@@ -619,7 +622,7 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
         <div className="relative group">
           <div 
             onClick={() => personaje.image_url && setIsImageLightboxOpen(true)}
-            className={`w-28 h-28 sm:w-32 sm:h-32 rounded-full bg-[#14141a] border-4 ${personaje.death_date ? 'border-red-600 shadow-[0_0_20px_rgba(220,38,38,0.3)]' : 'border-white/10'} overflow-hidden flex items-center justify-center shadow-xl relative transition-all duration-300 hover:scale-105 active:scale-95 ${personaje.image_url ? 'cursor-pointer hover:border-[#ffbf00]' : ''}`}
+            className={`w-28 h-28 sm:w-32 sm:h-32 rounded-full bg-[#14141a] border-4 ${personaje.death_date ? 'border-red-600 shadow-[0_0_20px_rgba(220,38,38,0.3)]' : 'border-white/10'} overflow-hidden flex items-center justify-center shadow-xl relative transition-all duration-300 hover:scale-105 active:scale-95 ${personaje.image_url ? 'cursor-pointer hover:border-red-500' : ''}`}
             title={personaje.image_url ? "Ver foto de perfil ampliada" : undefined}
           >
             {personaje.image_url ? (
@@ -654,8 +657,8 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
             )}
           </div>
 
-          {/* Yellow Rating Badge at the bottom right */}
-          <div className="absolute bottom-0 right-1 bg-[#ffbf00] text-black font-extrabold text-xs px-2.5 py-0.5 rounded-full border-2 border-[#08080a] shadow-md z-10">
+          {/* Rating Badge at the bottom right */}
+          <div className="absolute bottom-0 right-1 bg-red-600 text-white font-extrabold text-xs px-2.5 py-0.5 rounded-full border-2 border-[#08080a] shadow-md z-10">
             {personaje.rating.toFixed(1)}
           </div>
 
@@ -832,7 +835,7 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
           onClick={() => setActiveTab('informacion')}
           className={`flex-1 min-w-[105px] py-3 rounded-xl text-xs font-semibold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
             activeTab === 'informacion'
-              ? 'text-[#ffbf00] bg-white/5 border border-white/10 shadow-inner'
+              ? 'text-red-500 bg-red-500/10 border border-red-500/25 shadow-inner'
               : 'text-zinc-400 hover:text-white'
           }`}
         >
@@ -844,7 +847,7 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
           onClick={() => setActiveTab('resenas')}
           className={`flex-1 min-w-[105px] py-3 rounded-xl text-xs font-semibold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
             activeTab === 'resenas'
-              ? 'text-[#ffbf00] bg-white/5 border border-white/10 shadow-inner'
+              ? 'text-red-500 bg-red-500/10 border border-red-500/25 shadow-inner'
               : 'text-zinc-400 hover:text-white'
           }`}
         >
@@ -856,7 +859,7 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
           onClick={() => setActiveTab('ship')}
           className={`flex-1 min-w-[105px] py-3 rounded-xl text-xs font-semibold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
             activeTab === 'ship'
-              ? 'text-[#ffbf00] bg-white/5 border border-white/10 shadow-inner'
+              ? 'text-red-500 bg-red-500/10 border border-red-500/25 shadow-inner'
               : 'text-zinc-400 hover:text-white'
           }`}
         >
@@ -868,7 +871,7 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
           onClick={() => setActiveTab('estadistica')}
           className={`flex-1 min-w-[105px] py-3 rounded-xl text-xs font-semibold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
             activeTab === 'estadistica'
-              ? 'text-[#ffbf00] bg-white/5 border border-white/10 shadow-inner'
+              ? 'text-red-500 bg-red-500/10 border border-red-500/25 shadow-inner'
               : 'text-zinc-400 hover:text-white'
           }`}
         >
@@ -880,7 +883,7 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
           onClick={() => setActiveTab('radar')}
           className={`flex-1 min-w-[105px] py-3 rounded-xl text-xs font-semibold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
             activeTab === 'radar'
-              ? 'text-[#ffbf00] bg-white/5 border border-white/10 shadow-inner'
+              ? 'text-red-500 bg-red-500/10 border border-red-500/25 shadow-inner'
               : 'text-zinc-400 hover:text-white'
           }`}
         >
@@ -899,7 +902,7 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
             {/* Bio box */}
             <div className="bg-[#111116] border border-white/5 rounded-2xl p-6 shadow-xl space-y-4">
               <div className="flex items-center gap-2 border-b border-white/5 pb-3">
-                <Info className="w-4 h-4 text-[#ffbf00]" />
+                <Info className="w-4 h-4 text-red-500" />
                 <h3 className="text-sm font-extrabold uppercase tracking-widest text-white">
                   Biografía de Wikipedia
                 </h3>
@@ -913,7 +916,7 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
                     href={personaje.wikipedia_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 text-xs font-bold text-[#ffbf00] hover:text-yellow-400 transition"
+                    className="inline-flex items-center gap-2 text-xs font-bold text-red-400 hover:text-red-300 transition"
                   >
                     <span>Ver artículo completo en Wikipedia</span>
                     <ExternalLink className="w-3.5 h-3.5" />
@@ -925,7 +928,7 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
             {/* Registration Database metadata grid */}
             <div className="bg-[#111116] border border-white/5 rounded-2xl p-6 shadow-xl space-y-4">
               <div className="flex items-center gap-2 border-b border-white/5 pb-3">
-                <Fingerprint className="w-4 h-4 text-[#ffbf00]" />
+                <Fingerprint className="w-4 h-4 text-red-500" />
                 <h3 className="text-sm font-extrabold uppercase tracking-widest text-white">
                   Registro Técnico en Supabase
                 </h3>
@@ -935,7 +938,7 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
                 {/* Creation date */}
                 <div className="bg-black/35 border border-white/5 p-3 rounded-xl space-y-1">
                   <div className="text-zinc-400 font-bold uppercase tracking-widest text-[9px] flex items-center gap-1">
-                    <Clock className="w-3 h-3 text-[#ffbf00]" />
+                    <Clock className="w-3 h-3 text-red-500" />
                     <span>Fecha de registro</span>
                   </div>
                   <div className="text-zinc-200 font-semibold">
@@ -947,7 +950,7 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
                 {personaje.birth_date && (
                   <div className="bg-black/35 border border-white/5 p-3 rounded-xl space-y-1">
                     <div className="text-zinc-400 font-bold uppercase tracking-widest text-[9px] flex items-center gap-1">
-                      <Calendar className="w-3 h-3 text-[#ffbf00]" />
+                      <Calendar className="w-3 h-3 text-red-500" />
                       <span>Nacimiento</span>
                     </div>
                     <div className="text-zinc-200 font-semibold">
@@ -974,7 +977,7 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
                 {personaje.birth_place && (
                   <div className="bg-black/35 border border-white/5 p-3 rounded-xl space-y-1">
                     <div className="text-zinc-400 font-bold uppercase tracking-widest text-[9px] flex items-center gap-1">
-                      <MapPin className="w-3 h-3 text-[#ffbf00]" />
+                      <MapPin className="w-3 h-3 text-red-500" />
                       <span>Lugar de Nacimiento</span>
                     </div>
                     <div className="text-zinc-200 font-semibold">
@@ -987,7 +990,7 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
                 {personaje.height && (
                   <div className="bg-black/35 border border-white/5 p-3 rounded-xl space-y-1">
                     <div className="text-zinc-400 font-bold uppercase tracking-widest text-[9px] flex items-center gap-1">
-                      <Ruler className="w-3 h-3 text-[#ffbf00]" />
+                      <Ruler className="w-3 h-3 text-red-500" />
                       <span>Estatura</span>
                     </div>
                     <div className="text-zinc-200 font-semibold">
@@ -1000,7 +1003,7 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
                 {personaje.weight && (
                   <div className="bg-black/35 border border-white/5 p-3 rounded-xl space-y-1">
                     <div className="text-zinc-400 font-bold uppercase tracking-widest text-[9px] flex items-center gap-1">
-                      <Weight className="w-3 h-3 text-[#ffbf00]" />
+                      <Weight className="w-3 h-3 text-red-500" />
                       <span>Peso</span>
                     </div>
                     <div className="text-zinc-200 font-semibold">
@@ -1013,7 +1016,7 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
                 {personaje.gender && personaje.gender !== 'no_especificado' && (
                   <div className="bg-black/35 border border-white/5 p-3 rounded-xl space-y-1">
                     <div className="text-zinc-400 font-bold uppercase tracking-widest text-[9px] flex items-center gap-1">
-                      <Users className="w-3 h-3 text-[#ffbf00]" />
+                      <Users className="w-3 h-3 text-red-500" />
                       <span>Sexo / Género</span>
                     </div>
                     <div className="text-zinc-200 font-semibold flex items-center gap-1">
@@ -1027,7 +1030,7 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
                 {personaje.nationality && personaje.nationality !== 'No especificada' && (
                   <div className="bg-black/35 border border-white/5 p-3 rounded-xl space-y-1">
                     <div className="text-zinc-400 font-bold uppercase tracking-widest text-[9px] flex items-center gap-1">
-                      <Globe className="w-3 h-3 text-[#ffbf00]" />
+                      <Globe className="w-3 h-3 text-red-500" />
                       <span>Nacionalidad</span>
                     </div>
                     <div className="text-zinc-200 font-semibold flex items-center gap-1.5">
@@ -1041,13 +1044,13 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
                 {(personaje.occupation || (personaje.occupations && personaje.occupations.length > 0)) && (
                   <div className="bg-black/35 border border-white/5 p-3 rounded-xl space-y-1 sm:col-span-2">
                     <div className="text-zinc-400 font-bold uppercase tracking-widest text-[9px] flex items-center gap-1">
-                      <Briefcase className="w-3 h-3 text-[#ffbf00]" />
+                      <Briefcase className="w-3 h-3 text-red-500" />
                       <span>Ocupación / Profesión</span>
                     </div>
                     {personaje.occupations && personaje.occupations.length > 0 ? (
                       <div className="flex flex-wrap gap-2 pt-0.5">
                         {personaje.occupations.map((occ, oIdx) => (
-                          <span key={oIdx} className="inline-flex items-center px-2.5 py-1 bg-amber-500/10 border border-amber-500/20 rounded-lg text-amber-200 font-semibold text-xs">
+                          <span key={oIdx} className="inline-flex items-center px-2.5 py-1 bg-red-500/10 border border-red-500/20 rounded-lg text-red-200 font-semibold text-xs">
                             {occ}
                           </span>
                         ))}
@@ -1064,7 +1067,7 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
                 {personaje.parents && personaje.parents.length > 0 && (
                   <div className="bg-black/35 border border-white/5 p-3 rounded-xl space-y-1 sm:col-span-2">
                     <div className="text-zinc-400 font-bold uppercase tracking-widest text-[9px] flex items-center gap-1">
-                      <Users className="w-3 h-3 text-[#ffbf00]" />
+                      <Users className="w-3 h-3 text-red-500" />
                       <span>Padres</span>
                     </div>
                     <div className="flex flex-wrap gap-2 pt-0.5">
@@ -1081,7 +1084,7 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
                 {personaje.siblings && personaje.siblings.length > 0 && (
                   <div className="bg-black/35 border border-white/5 p-3 rounded-xl space-y-1 sm:col-span-2">
                     <div className="text-zinc-400 font-bold uppercase tracking-widest text-[9px] flex items-center gap-1">
-                      <Users className="w-3 h-3 text-[#ffbf00]" />
+                      <Users className="w-3 h-3 text-red-500" />
                       <span>Hermanos / Familiares</span>
                     </div>
                     <div className="flex flex-wrap gap-2 pt-0.5">
@@ -1153,7 +1156,7 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
                 <h3 className="text-sm font-extrabold uppercase tracking-widest text-white">
                   Resumen de Estrellas
                 </h3>
-                <span className="text-[10px] bg-yellow-500/10 text-[#ffbf00] border border-yellow-500/20 px-2.5 py-1 rounded-full font-mono font-bold uppercase">
+                <span className="text-[10px] bg-red-500/10 text-red-400 border border-red-500/20 px-2.5 py-1 rounded-full font-mono font-bold uppercase">
                   {voteSubmitted ? 'Reseña Registrada' : 'Deja tu Calificación'}
                 </span>
               </div>
@@ -1161,7 +1164,7 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
               <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
                 {/* Left side big badge */}
                 <div className="md:col-span-4 flex flex-col items-center justify-center text-center p-4 bg-black/20 rounded-xl border border-white/5 space-y-1">
-                  <div className="text-4xl sm:text-5xl font-black text-[#ffbf00] font-display">
+                  <div className="text-4xl sm:text-5xl font-black text-white font-display">
                     {(personaje.votes_count > 0 ? personaje.rating : 0).toFixed(1)}
                   </div>
                   
@@ -1194,7 +1197,7 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
                         <span className="w-3 text-zinc-400 font-bold text-right">{star}</span>
                         <div className="flex-1 h-2 bg-black/40 rounded-full overflow-hidden border border-white/5">
                           <div 
-                            className="h-full bg-[#ffbf00] rounded-full"
+                            className="h-full bg-gradient-to-r from-red-600 to-red-500 rounded-full"
                             style={{ width: `${percentage}%` }}
                           ></div>
                         </div>
@@ -1245,7 +1248,7 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
                         maxLength={500}
                         rows={3}
                         placeholder="Escribe lo que opinas de este personaje... ¿Por qué le das esta puntuación?"
-                        className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-[#ffbf00]/50 focus:ring-1 focus:ring-[#ffbf00]/30 transition"
+                        className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-red-500/50 focus:ring-1 focus:ring-red-500/30 transition"
                       />
                       <div className="flex justify-between items-center text-[10px] text-zinc-500 font-medium">
                         <span>{currentUser ? 'Registrado con Google' : 'Modo Invitado (Anónimo)'}</span>
@@ -1257,13 +1260,13 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
                       <button
                         type="submit"
                         disabled={userRating === null || isSubmittingResena}
-                        className="px-5 py-2.5 bg-[#ffbf00] hover:bg-[#ffbf00]/90 text-black font-extrabold text-xs uppercase tracking-wider rounded-xl transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 shadow-md shadow-[#ffbf00]/10"
+                        className="px-5 py-2.5 bg-red-600 hover:bg-red-500 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 shadow-md shadow-red-600/20"
                       >
                         {isSubmittingResena ? (
                           <span>Publicando...</span>
                         ) : (
                           <>
-                            <Star className="w-4 h-4 fill-current" />
+                            <Star className="w-4 h-4 fill-[#ffbf00] text-[#ffbf00]" />
                             <span>Publicar Starpost</span>
                           </>
                         )}
@@ -1271,14 +1274,14 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
                     </div>
                   </form>
                 ) : (
-                  <div className="bg-yellow-500/5 border border-yellow-500/10 rounded-xl p-4 space-y-3">
+                  <div className="bg-red-500/5 border border-red-500/20 rounded-xl p-4 space-y-3">
                     <div className="flex justify-between items-center">
-                      <span className="text-xs font-extrabold text-yellow-400 uppercase tracking-wider flex items-center gap-1.5">
-                        <Star className="w-3.5 h-3.5 fill-current" />
+                      <span className="text-xs font-extrabold text-red-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <Star className="w-3.5 h-3.5 fill-[#ffbf00] text-[#ffbf00]" />
                         <span>Tu Starpost Registrado</span>
                       </span>
                       <button
-                        onClick={handleDeleteResena}
+                        onClick={() => setIsConfirmDeleteStarpostOpen(true)}
                         disabled={isSubmittingResena}
                         className="text-xs text-red-400 hover:text-red-300 transition flex items-center gap-1 font-bold uppercase tracking-wider disabled:opacity-40"
                       >
@@ -1438,7 +1441,7 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
                           <button
                             type="button"
                             onClick={() => setActiveReplyStarpost(resena)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-zinc-400 hover:text-[#ffbf00] hover:bg-[#ffbf00]/10 border border-transparent hover:border-[#ffbf00]/20 transition cursor-pointer"
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-zinc-400 hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition cursor-pointer"
                             title="Ver o responder a este Starpost"
                           >
                             <MessageSquare className="w-3.5 h-3.5" />
@@ -1512,7 +1515,7 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
           <div className="space-y-6">
             <div className="bg-[#111116] border border-white/5 rounded-2xl p-6 shadow-xl space-y-5">
               <div className="flex items-center gap-2 border-b border-white/5 pb-3">
-                <Flame className="w-4 h-4 text-[#ffbf00]" />
+                <Flame className="w-4 h-4 text-red-500" />
                 <h3 className="text-sm font-extrabold uppercase tracking-widest text-white">
                   Calculadora de Afinidad / Ship
                 </h3>
@@ -1531,7 +1534,7 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
                         setShipTargetSlug(e.target.value);
                         setShipResult(null);
                       }}
-                      className="w-full bg-[#161620] border border-white/10 hover:border-white/20 focus:border-yellow-500 rounded-xl px-4 py-3 text-sm text-white outline-none transition"
+                      className="w-full bg-[#161620] border border-white/10 hover:border-white/20 focus:border-red-500 rounded-xl px-4 py-3 text-sm text-white outline-none transition"
                     >
                       <option value="">-- Selecciona un personaje --</option>
                       {personajesList.map((p) => (
@@ -1550,7 +1553,7 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
                 <button
                   type="submit"
                   disabled={!shipTargetSlug}
-                  className="w-full py-3 bg-gradient-to-r from-yellow-500 to-[#ffbf00] hover:from-[#ffbf00] hover:to-yellow-500 active:scale-98 text-black font-extrabold text-xs uppercase tracking-widest rounded-xl transition shadow-lg shadow-yellow-950/30 cursor-pointer disabled:opacity-40"
+                  className="w-full py-3 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 active:scale-98 text-white font-extrabold text-xs uppercase tracking-widest rounded-xl transition shadow-lg shadow-red-950/30 cursor-pointer disabled:opacity-40"
                 >
                   Calcular Ship Match
                 </button>
@@ -1559,8 +1562,8 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
               {/* Match Result Display */}
               {shipResult && (
                 <div className="bg-black/30 border border-white/5 p-5 rounded-2xl text-center space-y-3 animate-fade-in">
-                  <div className="inline-flex items-center justify-center w-20 h-20 rounded-full border-4 border-yellow-500/20 bg-[#ffbf00]/10">
-                    <span className="text-2xl font-black text-[#ffbf00] font-mono">
+                  <div className="inline-flex items-center justify-center w-20 h-20 rounded-full border-4 border-red-500/30 bg-red-500/10">
+                    <span className="text-2xl font-black text-red-500 font-mono">
                       {shipResult.percentage}%
                     </span>
                   </div>
@@ -1584,7 +1587,7 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
             <div className="bg-[#111116] border border-white/5 rounded-2xl p-6 shadow-xl space-y-5">
               
               <div className="flex items-center gap-2 border-b border-white/5 pb-3">
-                <BarChart3 className="w-4 h-4 text-[#ffbf00]" />
+                <BarChart3 className="w-4 h-4 text-red-500" />
                 <h3 className="text-sm font-extrabold uppercase tracking-widest text-white">
                   Métricas de Comunidad
                 </h3>
@@ -1597,7 +1600,7 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
                     <span className="text-[10px] text-zinc-400 uppercase tracking-widest block font-bold">
                       Aprobación General
                     </span>
-                    <span className="text-xl font-black text-[#ffbf00] font-mono block pt-1">
+                    <span className="text-xl font-black text-red-500 font-mono block pt-1">
                       {Math.round((personaje.rating / 5) * 100)}%
                     </span>
                   </div>
@@ -1628,7 +1631,7 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
                         <div key={starNum} className="flex flex-col items-center flex-1 space-y-2">
                           <span className="text-[10px] text-zinc-500 font-mono">{count}</span>
                           <div 
-                            className="w-8 sm:w-10 bg-gradient-to-t from-[#ffbf00]/40 to-[#ffbf00] rounded-t-md hover:opacity-85 transition-all"
+                            className="w-8 sm:w-10 bg-gradient-to-t from-red-600/40 to-red-600 rounded-t-md hover:opacity-85 transition-all"
                             style={{ height: `${heightPercent}px` }}
                           ></div>
                           <span className="text-[10px] font-bold text-zinc-400">{starNum}★</span>
@@ -1644,7 +1647,7 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
                     <TrendingUp className="w-4 h-4 text-emerald-400" />
                     <span>Tendencia de calificación: Estable / Alta</span>
                   </span>
-                  <span className="text-[10px] font-mono text-[#ffbf00]">
+                  <span className="text-[10px] font-mono text-red-400">
                     Graderz5 Engine v1.0
                   </span>
                 </div>
@@ -1708,7 +1711,7 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
                     href={personaje.wikipedia_url} 
                     target="_blank" 
                     rel="noreferrer"
-                    className="inline-flex items-center gap-1.5 text-xs text-[#ffbf00] hover:underline font-bold"
+                    className="inline-flex items-center gap-1.5 text-xs text-red-400 hover:text-red-300 hover:underline font-bold"
                   >
                     <span>Ver en Wikipedia</span>
                     <ExternalLink className="w-3.5 h-3.5" />
@@ -1734,8 +1737,28 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
             setRepliesCountMap(prev => ({ ...prev, [starpostId]: newCount }));
             setResenasList(prev => prev.map(r => r.id === starpostId ? { ...r, replies_count: newCount } : r));
           }}
+          onStarpostDeleted={async (deletedId) => {
+            setResenasList(prev => prev.filter(r => r.id !== deletedId));
+            if (activeReplyStarpost?.id === deletedId) {
+              setActiveReplyStarpost(null);
+            }
+            if (personaje) {
+              const updatedChar = await getPersonajeBySlug(personaje.slug);
+              if (updatedChar) setPersonaje(updatedChar);
+            }
+          }}
         />
       )}
+
+      {/* MODAL DE CONFIRMACIÓN PARA ELIMINAR STARPOST */}
+      <ConfirmDeleteModal
+        isOpen={isConfirmDeleteStarpostOpen}
+        title="¿Eliminar tu Starpost?"
+        description="Esta acción eliminará de forma permanente tu Starpost, su calificación, todas sus respuestas de nivel 1 y nivel 2, y todas las reacciones asociadas de la base de datos."
+        isDeleting={isSubmittingResena}
+        onConfirm={handleDeleteResena}
+        onClose={() => setIsConfirmDeleteStarpostOpen(false)}
+      />
 
     </div>
   );

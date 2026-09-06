@@ -340,7 +340,7 @@ export const AddPersonajeModal: React.FC<AddPersonajeModalProps> = ({
 
                       {result.height && (
                         <div className="inline-flex items-center gap-1 text-[11px] bg-white/5 border border-white/10 px-2.5 py-0.5 rounded-lg text-zinc-300">
-                          <Ruler className="w-3 h-3 text-yellow-400 shrink-0" />
+                          <Ruler className="w-3 h-3 text-red-400 shrink-0" />
                           <span className="text-zinc-500">Altura:</span>
                           <span className="font-semibold text-white">{result.height}</span>
                         </div>
@@ -355,18 +355,18 @@ export const AddPersonajeModal: React.FC<AddPersonajeModalProps> = ({
                       )}
 
                       {result.parents && result.parents.length > 0 && (
-                        <div className="inline-flex items-center gap-1.5 text-[11px] bg-[#ffbf00]/10 border border-[#ffbf00]/20 px-2.5 py-0.5 rounded-lg text-amber-200">
-                          <Users className="w-3 h-3 text-[#ffbf00] shrink-0" />
-                          <span className="text-amber-400/70">Padres:</span>
-                          <span className="font-semibold text-amber-200 truncate max-w-[150px]" title={result.parents.join(', ')}>{result.parents.join(', ')}</span>
+                        <div className="inline-flex items-center gap-1.5 text-[11px] bg-red-500/10 border border-red-500/20 px-2.5 py-0.5 rounded-lg text-red-200">
+                          <Users className="w-3 h-3 text-red-400 shrink-0" />
+                          <span className="text-red-400/70">Padres:</span>
+                          <span className="font-semibold text-red-200 truncate max-w-[150px]" title={result.parents.join(', ')}>{result.parents.join(', ')}</span>
                         </div>
                       )}
 
                       {result.siblings && result.siblings.length > 0 && (
-                        <div className="inline-flex items-center gap-1.5 text-[11px] bg-[#ffbf00]/10 border border-[#ffbf00]/20 px-2.5 py-0.5 rounded-lg text-amber-200">
-                          <Users className="w-3 h-3 text-[#ffbf00] shrink-0" />
-                          <span className="text-amber-400/70">Hermanos:</span>
-                          <span className="font-semibold text-amber-200 truncate max-w-[150px]" title={result.siblings.join(', ')}>{result.siblings.join(', ')}</span>
+                        <div className="inline-flex items-center gap-1.5 text-[11px] bg-red-500/10 border border-red-500/20 px-2.5 py-0.5 rounded-lg text-red-200">
+                          <Users className="w-3 h-3 text-red-400 shrink-0" />
+                          <span className="text-red-400/70">Hermanos:</span>
+                          <span className="font-semibold text-red-200 truncate max-w-[150px]" title={result.siblings.join(', ')}>{result.siblings.join(', ')}</span>
                         </div>
                       )}
 
@@ -465,15 +465,15 @@ export const AddPersonajeModal: React.FC<AddPersonajeModalProps> = ({
 
             {/* Relatives Suggestion Section ("¿Agregar personajes extras?") */}
             {result.isHuman && result.relatives && result.relatives.length > 0 && (
-              <div className="bg-[#12121a] border border-[#ffbf00]/20 rounded-2xl p-4 space-y-2.5">
+              <div className="bg-[#12121a] border border-red-500/20 rounded-2xl p-4 space-y-2.5">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Users className="w-4 h-4 text-[#ffbf00]" />
+                    <Users className="w-4 h-4 text-red-500" />
                     <h4 className="text-xs sm:text-sm font-bold text-white font-display">
                       ¿Deseas agregar personajes extras? (Familiares detectados)
                     </h4>
                   </div>
-                  <span className="text-[10px] text-[#ffbf00] font-mono font-bold bg-[#ffbf00]/10 px-2 py-0.5 rounded-full">
+                  <span className="text-[10px] text-red-400 font-mono font-bold bg-red-500/10 px-2 py-0.5 rounded-full">
                     {result.relatives.length} encontrado{result.relatives.length > 1 ? 's' : ''}
                   </span>
                 </div>
@@ -487,9 +487,9 @@ export const AddPersonajeModal: React.FC<AddPersonajeModalProps> = ({
                       key={`${rel.wikidataId}-${idx}`}
                       type="button"
                       onClick={() => handleSelectRelative(rel.name)}
-                      className="inline-flex items-center gap-1.5 bg-black/50 hover:bg-[#ffbf00]/15 text-zinc-300 hover:text-white border border-white/10 hover:border-[#ffbf00]/40 px-3 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer group"
+                      className="inline-flex items-center gap-1.5 bg-black/50 hover:bg-red-500/15 text-zinc-300 hover:text-white border border-white/10 hover:border-red-500/40 px-3 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer group"
                     >
-                      <span className="text-[10px] text-zinc-500 group-hover:text-[#ffbf00] uppercase font-bold tracking-wider">
+                      <span className="text-[10px] text-zinc-500 group-hover:text-red-400 uppercase font-bold tracking-wider">
                         {rel.label}:
                       </span>
                       <span className="font-semibold text-white">{rel.name}</span>
