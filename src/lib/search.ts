@@ -39,17 +39,17 @@ export interface SearchResponse {
 }
 
 const RECENT_SEARCHES_KEY = 'graderz5_recent_searches';
-const MAX_RECENT_ITEMS = 8;
+const MAX_RECENT_ITEMS = 5;
 
 /**
- * Recovers recent searches from localStorage
+ * Recovers recent searches from localStorage (maximum 5 items)
  */
 export function getRecentSearches(): RecentSearchItem[] {
   try {
     const raw = localStorage.getItem(RECENT_SEARCHES_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    return Array.isArray(parsed) ? parsed.slice(0, MAX_RECENT_ITEMS) : [];
   } catch (e) {
     console.warn('Error reading recent searches:', e);
     return [];
