@@ -58,6 +58,65 @@ const TEXTURE_URLS: Record<MapTextureMode, { globe: string; bump: string; name: 
   }
 };
 
+// Helper to build 2D Canvas Sprites for Country Labels with 100% UTF-8 accent support (e.g. Perú)
+const createCountryLabelSprite = (text: string, color: string = '#facc15') => {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return new THREE.Group();
+
+  canvas.width = 512;
+  canvas.height = 128;
+
+  // Crisp sans-serif font supporting all unicode accents natively
+  ctx.font = 'bold 32px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  const textWidth = ctx.measureText(text).width;
+  const paddingX = 26;
+  const badgeWidth = Math.min(490, Math.max(160, textWidth + paddingX * 2));
+  const badgeHeight = 56;
+  const x = (512 - badgeWidth) / 2;
+  const y = (128 - badgeHeight) / 2;
+  const radius = 16;
+
+  // Translucent dark badge pill
+  ctx.fillStyle = 'rgba(10, 16, 31, 0.88)';
+  ctx.beginPath();
+  if (typeof ctx.roundRect === 'function') {
+    ctx.roundRect(x, y, badgeWidth, badgeHeight, radius);
+  } else {
+    ctx.rect(x, y, badgeWidth, badgeHeight);
+  }
+  ctx.fill();
+
+  // Vibrant accent border
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+
+  // High contrast white text with shadow
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
+  ctx.shadowBlur = 6;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(text, 256, 64);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.needsUpdate = true;
+  texture.minFilter = THREE.LinearFilter;
+
+  const spriteMat = new THREE.SpriteMaterial({
+    map: texture,
+    transparent: true,
+    depthWrite: false
+  });
+
+  const sprite = new THREE.Sprite(spriteMat);
+  // Scale in Globe units: width 11, height 2.75
+  sprite.scale.set(11, 2.75, 1);
+  return sprite;
+};
+
 export const GuardianGlobe: React.FC<GuardianGlobeProps> = ({
   stats,
   lights,
@@ -174,41 +233,36 @@ export const GuardianGlobe: React.FC<GuardianGlobeProps> = ({
     return Math.round(baseCount * genderRatio);
   };
 
-  // Concentric pulsing radar rings for countries with votes
-  const ringsData = useMemo(() => {
+  // Labels layer for countries with votes - using 2D Canvas Sprite to guarantee 100% full UTF-8 accent support (e.g. Perú)
+  const countryLabelsData = useMemo(() => {
     return stats
       .filter(s => getCountryCount(s) > 0 || s.isHomeCountry)
       .map(st => {
         const count = getCountryCount(st);
-        return {
-          lat: st.lat,
-          lng: st.lng,
-          maxR: Math.min(count * 2.2 + 5, 18),
-          propagationSpeed: 1.4,
-          repeatPeriod: 1200,
-          color: () => st.isHomeCountry
-            ? 'rgba(16, 185, 129, 0.85)'
-            : (selectedGender === 'm' ? 'rgba(56, 189, 248, 0.85)' : selectedGender === 'f' ? 'rgba(244, 114, 182, 0.85)' : 'rgba(249, 115, 22, 0.85)')
-        };
-      });
-  }, [stats, selectedFilter, selectedGender]);
+        let suffix = `${count} ${count === 1 ? 'voto' : 'votos'}`;
+        if (selectedGender === 'm') suffix = `${count} ${count === 1 ? 'hombre' : 'hombres'}`;
+        else if (selectedGender === 'f') suffix = `${count} ${count === 1 ? 'mujer' : 'mujeres'}`;
 
-  // Labels layer for countries with votes
-  const labelsData = useMemo(() => {
-    return stats
-      .filter(s => getCountryCount(s) > 0 || s.isHomeCountry)
-      .map(st => {
-        const count = getCountryCount(st);
-        let suffix = `(${count})`;
-        if (selectedGender === 'm') suffix = `(♂ ${count})`;
-        else if (selectedGender === 'f') suffix = `(♀ ${count})`;
+        // Ensure correct Unicode spelling (fix "Per?" -> "Perú")
+        let countryName = st.country;
+        if (countryName.toLowerCase() === 'peru' || countryName.toLowerCase() === 'perú' || countryName.toLowerCase().startsWith('per')) {
+          countryName = 'Perú';
+        }
+
+        let color = '#facc15';
+        if (st.isHomeCountry) color = '#10b981';
+        else if (selectedFilter === 'simp') color = '#f97316';
+        else if (selectedFilter === 'hater') color = '#c084fc';
+        else if (selectedFilter === 'conozco') color = '#38bdf8';
+        else if (selectedGender === 'm') color = '#38bdf8';
+        else if (selectedGender === 'f') color = '#f472b6';
 
         return {
           lat: st.lat,
           lng: st.lng,
-          text: `${st.country} ${suffix}`,
-          size: 0.9,
-          color: st.isHomeCountry ? '#10b981' : (selectedGender === 'm' ? '#38bdf8' : selectedGender === 'f' ? '#f472b6' : '#facc15')
+          country: countryName,
+          text: `${countryName} (${suffix})`,
+          color
         };
       });
   }, [stats, selectedFilter, selectedGender]);
@@ -228,20 +282,20 @@ export const GuardianGlobe: React.FC<GuardianGlobeProps> = ({
       .showAtmosphere(true)
       .width(container.clientWidth || 400)
       .height(container.clientHeight || 500)
-      // 1. Guardian Lights Points
+      // 1. Guardian Lights Points (lying flat on map surface, organic constellations)
       .pointsData(activeLights)
       .pointLat('lat')
       .pointLng('lng')
       .pointColor('color')
-      .pointAltitude(0.04)
-      .pointRadius(0.75)
-      .pointResolution(32)
+      .pointAltitude((d: any) => d.altitude || 0.005)
+      .pointRadius((d: any) => d.radius || 0.08)
+      .pointResolution(24)
       .pointLabel((d: any) => `
         <div style="background: rgba(10, 16, 31, 0.95); border: 1px solid ${d.color}; padding: 6px 12px; border-radius: 10px; color: #ffffff; font-family: system-ui, sans-serif; font-size: 12px; box-shadow: 0 0 15px ${d.color}66; pointer-events: none;">
           <div style="font-weight: 700; color: ${d.color}; text-transform: uppercase; font-size: 11px;">
             ${d.type === 'home' ? '🏠 País de Origen' : d.type}
           </div>
-          <div style="font-weight: 600; font-size: 13px; margin-top: 2px;">${d.label}</div>
+          <div style="font-weight: 600; font-size: 13px; margin-top: 2px;">${d.userName || d.label || d.country}</div>
           <div style="color: #94a3b8; font-size: 11px; margin-top: 1px;">📍 ${d.country}</div>
         </div>
       `)
@@ -249,23 +303,16 @@ export const GuardianGlobe: React.FC<GuardianGlobeProps> = ({
         if (onSelectCountry) onSelectCountry(d.country);
         globe.pointOfView({ lat: d.lat, lng: d.lng, altitude: 1.5 }, 1200);
       })
-      // 2. Concentric Radar Rings
-      .ringsData(ringsData)
-      .ringLat('lat')
-      .ringLng('lng')
-      .ringColor('color')
-      .ringMaxRadius('maxR')
-      .ringPropagationSpeed('propagationSpeed')
-      .ringRepeatPeriod('repeatPeriod')
-      // 3. Country Labels
-      .labelsData(labelsData)
-      .labelLat('lat')
-      .labelLng('lng')
-      .labelText('text')
-      .labelSize('size')
-      .labelColor('color')
-      .labelDotRadius(0.3)
-      .labelResolution(2);
+      // 2. Country Labels using 2D Canvas Sprite (Supports all UTF-8 characters like Perú)
+      .objectsData(countryLabelsData)
+      .objectLat('lat')
+      .objectLng('lng')
+      .objectAltitude(0.04)
+      .objectThreeObject((d: any) => createCountryLabelSprite(d.text, d.color))
+      .onObjectClick((d: any) => {
+        if (onSelectCountry) onSelectCountry(d.country);
+        globe.pointOfView({ lat: d.lat, lng: d.lng, altitude: 1.5 }, 1200);
+      });
 
     globeInstanceRef.current = globe;
 
@@ -332,14 +379,13 @@ export const GuardianGlobe: React.FC<GuardianGlobeProps> = ({
     };
   }, []);
 
-  // Update Points & Rings whenever data changes
+  // Update Points & Labels whenever data changes
   useEffect(() => {
     if (!globeInstanceRef.current) return;
     globeInstanceRef.current
       .pointsData(activeLights)
-      .ringsData(ringsData)
-      .labelsData(labelsData);
-  }, [activeLights, ringsData, labelsData]);
+      .objectsData(countryLabelsData);
+  }, [activeLights, countryLabelsData]);
 
   // Update Auto-Rotate
   useEffect(() => {

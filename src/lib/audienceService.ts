@@ -38,6 +38,8 @@ export interface GlobeLightPoint {
   color: string;
   intensity: number;
   size: number;
+  radius?: number;
+  altitude?: number;
   userName?: string;
 }
 
@@ -289,13 +291,15 @@ export async function getPersonajeAudience(
   let seedIndex = 1;
   for (const [countryName, data] of Object.entries(countryMap)) {
     const coords = getCountryCoordinates(countryName);
+    const canonicalCountryName = coords ? coords.name : countryName;
     const lat = coords ? coords.lat : 0;
     const lng = coords ? coords.lng : 0;
-    const jitterMax = coords?.jitterRadius || 1.8;
+    const jitterMax = coords?.jitterRadius || 2.5;
+    const regions = coords?.regions || [];
     const code = coords ? coords.code : '';
 
     stats.push({
-      country: countryName,
+      country: canonicalCountryName,
       countryCode: code,
       lat,
       lng,
@@ -309,7 +313,7 @@ export async function getPersonajeAudience(
       otherCount: data.other,
       reviewsCount: 0,
       percentageOfTotal: totalValidVotes > 0 ? Math.round((data.total / totalValidVotes) * 100) : 0,
-      isHomeCountry: Boolean(personajeNationality && personajeNationality.toLowerCase().includes(countryName.toLowerCase())),
+      isHomeCountry: Boolean(personajeNationality && personajeNationality.toLowerCase().includes(canonicalCountryName.toLowerCase())),
       byActitud: {
         fan: { ...data.byActitud.fan },
         simp: { ...data.byActitud.simp },
@@ -318,15 +322,24 @@ export async function getPersonajeAudience(
       }
     });
 
-    // Generate Guardian-style points with natural dispersion across the country based on counts & genders
+    // Generate Guardian-style points inspired by Rise of the Guardians (El Origen de los Guardianes)
+    // Distributed across the country's actual geography (departments/regions), flat on map surface
     const actitudTypes: ('fan' | 'simp' | 'hater' | 'conozco')[] = ['fan', 'simp', 'hater', 'conozco'];
     for (const actType of actitudTypes) {
       const actStats = data.byActitud[actType];
       const count = actStats.total;
       if (count <= 0) continue;
 
-      // Emit points proportionally (up to 12 points per category per country for crisp rendering)
-      const pointsToEmit = Math.min(count, 12);
+      // "mientras más votos son, más pequeños los puntos"
+      // Individual radius decreases smoothly from 0.18 (for 1 vote) down to 0.04 (for dense clusters)
+      const pointRadius = Math.max(0.04, 0.20 / Math.pow(count, 0.35));
+
+      // Emitted sparks count scales smoothly with votes to create a rich starry constellation
+      let pointsToEmit = 2;
+      if (count === 1) pointsToEmit = 2;
+      else if (count <= 5) pointsToEmit = count * 2;
+      else if (count <= 20) pointsToEmit = Math.round(count * 1.6);
+      else pointsToEmit = Math.min(35 + Math.round(count * 0.5), 85);
       
       // Determine genders of the emitted points based on proportions
       for (let i = 0; i < pointsToEmit; i++) {
@@ -337,19 +350,45 @@ export async function getPersonajeAudience(
           pointGender = 'f';
         }
 
-        const pointLat = generateJitter(lat, jitterMax, seedIndex++);
-        const pointLng = generateJitter(lng, jitterMax, seedIndex * 1.5);
+        let pointLat = lat;
+        let pointLng = lng;
+        let regionLabel = canonicalCountryName;
+
+        if (regions.length > 0) {
+          // Distribute naturally across all geographic regions and departments
+          const region = regions[(i + seedIndex) % regions.length];
+          regionLabel = region.name;
+          const localJitter = 0.45;
+          const offsetAngle = (seedIndex * 137.5) * (Math.PI / 180);
+          const offsetDist = (((seedIndex % 7) + 1) / 8) * localJitter;
+          pointLat = region.lat + Math.sin(offsetAngle) * offsetDist;
+          pointLng = region.lng + Math.cos(offsetAngle) * offsetDist;
+        } else {
+          // Natural dispersion around country bounds
+          const distanceFactor = Math.pow((i + 1) / pointsToEmit, 0.65) * 0.95;
+          const angle = (seedIndex * 137.5) * (Math.PI / 180);
+          const currentJitter = jitterMax * distanceFactor;
+          pointLat = lat + Math.sin(angle) * currentJitter;
+          pointLng = lng + Math.cos(angle) * currentJitter;
+        }
+        seedIndex++;
+
+        // Points lie directly ON the map surface (altitude ~0.005) - NO vertical spikes!
+        const pointAltitude = 0.005;
+
         lights.push({
-          id: `light-${countryName}-${actType}-${i}`,
-          country: countryName,
+          id: `light-${canonicalCountryName}-${actType}-${i}`,
+          country: canonicalCountryName,
           lat: pointLat,
           lng: pointLng,
           type: actType,
           gender: pointGender,
           color: COLOR_MAP[actType] || COLOR_MAP.fan,
-          intensity: 1.2,
-          size: 0.08,
-          userName: `${count} ${actType === 'fan' ? 'Fans' : actType === 'simp' ? 'SIMPs' : actType === 'hater' ? 'Haters' : 'Audiencia'} en ${countryName} (${actStats.m} ♂ / ${actStats.f} ♀)`
+          intensity: 1.4,
+          size: pointRadius,
+          radius: pointRadius,
+          altitude: pointAltitude,
+          userName: `${count} ${actType === 'fan' ? 'Fans' : actType === 'simp' ? 'SIMPs' : actType === 'hater' ? 'Haters' : 'Audiencia'} en ${canonicalCountryName} (${regionLabel})`
         });
       }
     }
