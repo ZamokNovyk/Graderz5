@@ -188,6 +188,7 @@ export default function App() {
               <ProfileView 
                 currentUser={currentUser}
                 onSignInGoogle={handleSignInGoogle}
+                onSelectPersonaje={handleOpenPersonaje}
               />
             )}
           </>

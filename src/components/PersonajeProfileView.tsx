@@ -28,9 +28,11 @@ import {
   HeartCrack,
   Briefcase,
   Trash2,
-  User as UserIcon
+  User as UserIcon,
+  ThumbsUp,
+  ThumbsDown
 } from 'lucide-react';
-import { ActitudType, Personaje, PersonajeResena } from '../types';
+import { ActitudType, Personaje, PersonajeResena, StarpostReactionType } from '../types';
 import { User } from '../lib/firebase';
 import { getPersonajeBySlug, votePersonaje, getPersonajesList } from '../lib/personajesService';
 import { 
@@ -44,8 +46,12 @@ import {
   getResenasForPersonaje, 
   getUserResenaForPersonaje, 
   saveResena, 
-  deleteResena 
+  deleteResena,
+  getUserReactionsForStarposts,
+  toggleStarpostReaction,
+  getRepliesCountsForStarposts
 } from '../lib/resenasService';
+import { StarpostRepliesModal } from './StarpostRepliesModal';
 import { getCountryFlag } from '../data/countries';
 import { FlagImage } from './FlagImage';
 import { GuardianGlobe } from './GuardianGlobe';
@@ -81,10 +87,14 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
   const [hoverRating, setHoverRating] = useState<number | null>(null);
   const [voteSubmitted, setVoteSubmitted] = useState(false);
   
-  // Reviews state
+  // Reviews state (Starposts)
   const [resenasList, setResenasList] = useState<PersonajeResena[]>([]);
   const [userReviewText, setUserReviewText] = useState('');
   const [isSubmittingResena, setIsSubmittingResena] = useState(false);
+  const [userReactions, setUserReactions] = useState<Record<string, StarpostReactionType>>({});
+  const [isTogglingReaction, setIsTogglingReaction] = useState<Record<string, boolean>>({});
+  const [activeReplyStarpost, setActiveReplyStarpost] = useState<PersonajeResena | null>(null);
+  const [repliesCountMap, setRepliesCountMap] = useState<Record<string, number>>({});
 
   // Ship Calculator State
   const [shipTargetSlug, setShipTargetSlug] = useState<string>('');
@@ -130,6 +140,18 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
           setUserRating(null);
           setVoteSubmitted(false);
           setUserReviewText('');
+        }
+
+        // Cargar reacciones de Like/Dislike y conteos de respuestas para estos Starposts
+        if (reviews.length > 0) {
+          const ids = reviews.map(r => r.id);
+          getUserReactionsForStarposts(effectiveUid, ids).then(reactionsMap => {
+            setUserReactions(reactionsMap);
+          }).catch(() => {});
+
+          getRepliesCountsForStarposts(ids).then(countsMap => {
+            setRepliesCountMap(countsMap);
+          }).catch(() => {});
         }
       } catch (err) {
         console.error('Error cargando perfil primario:', err);
@@ -296,6 +318,128 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
       console.error('Error al eliminar reseña:', err);
     } finally {
       setIsSubmittingResena(false);
+    }
+  };
+
+  const handleReactionToStarpost = async (starpostId: string, reaction: StarpostReactionType) => {
+    if (isTogglingReaction[starpostId]) return;
+    const effectiveUid = currentUser?.uid || getOrCreateGuestUid();
+
+    // Guardar estado previo para rollback en caso de error
+    const prevReaction = userReactions[starpostId] || null;
+    const currentResena = resenasList.find(r => r.id === starpostId);
+    const prevLikes = currentResena?.likes_count || 0;
+    const prevDislikes = currentResena?.dislikes_count || 0;
+
+    // Calcular actualización optimista (+1 / -1)
+    let nextReaction: StarpostReactionType | null = null;
+    let nextLikes = prevLikes;
+    let nextDislikes = prevDislikes;
+
+    if (prevReaction === reaction) {
+      // Toggle off (quitar reacción)
+      nextReaction = null;
+      if (reaction === 'like') {
+        nextLikes = Math.max(0, nextLikes - 1);
+      } else {
+        nextDislikes = Math.max(0, nextDislikes - 1);
+      }
+    } else if (prevReaction === null) {
+      // Primera reacción
+      nextReaction = reaction;
+      if (reaction === 'like') {
+        nextLikes = nextLikes + 1;
+      } else {
+        nextDislikes = nextDislikes + 1;
+      }
+    } else {
+      // Cambio de like a dislike o de dislike a like
+      nextReaction = reaction;
+      if (reaction === 'like') {
+        nextLikes = nextLikes + 1;
+        nextDislikes = Math.max(0, nextDislikes - 1);
+      } else {
+        nextDislikes = nextDislikes + 1;
+        nextLikes = Math.max(0, nextLikes - 1);
+      }
+    }
+
+    // Actualización optimista inmediata
+    setUserReactions(prev => {
+      const copy = { ...prev };
+      if (nextReaction === null) {
+        delete copy[starpostId];
+      } else {
+        copy[starpostId] = nextReaction;
+      }
+      return copy;
+    });
+
+    setResenasList(prevList => prevList.map(r => {
+      if (r.id === starpostId) {
+        return {
+          ...r,
+          likes_count: nextLikes,
+          dislikes_count: nextDislikes
+        };
+      }
+      return r;
+    }));
+
+    setIsTogglingReaction(prev => ({ ...prev, [starpostId]: true }));
+
+    try {
+      const res = await toggleStarpostReaction({
+        starpostId,
+        userUid: effectiveUid,
+        reaction
+      });
+
+      // Asegurar valores reales retornados
+      setUserReactions(prev => {
+        const copy = { ...prev };
+        if (res.activeReaction === null) {
+          delete copy[starpostId];
+        } else {
+          copy[starpostId] = res.activeReaction;
+        }
+        return copy;
+      });
+
+      setResenasList(prevList => prevList.map(r => {
+        if (r.id === starpostId) {
+          return {
+            ...r,
+            likes_count: res.likesCount,
+            dislikes_count: res.dislikesCount
+          };
+        }
+        return r;
+      }));
+    } catch (err) {
+      console.error('Error al reaccionar al Starpost:', err);
+      // Revertir optimismo
+      setUserReactions(prev => {
+        const copy = { ...prev };
+        if (prevReaction === null) {
+          delete copy[starpostId];
+        } else {
+          copy[starpostId] = prevReaction;
+        }
+        return copy;
+      });
+      setResenasList(prevList => prevList.map(r => {
+        if (r.id === starpostId) {
+          return {
+            ...r,
+            likes_count: prevLikes,
+            dislikes_count: prevDislikes
+          };
+        }
+        return r;
+      }));
+    } finally {
+      setIsTogglingReaction(prev => ({ ...prev, [starpostId]: false }));
     }
   };
 
@@ -705,7 +849,7 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
           }`}
         >
           <Star className="w-4 h-4" />
-          <span>Reseñas</span>
+          <span>Starposts</span>
         </button>
 
         <button
@@ -1066,7 +1210,7 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
                 {!voteSubmitted ? (
                   <form onSubmit={handleSubmitResena} className="space-y-4">
                     <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest text-center">
-                      ¿Conoces a {personaje.nombre}? ¡Deja tu calificación y reseña!
+                      ¿Conoces a {personaje.nombre}? ¡Deja tu calificación y Starpost!
                     </p>
 
                     <div className="flex items-center justify-center gap-2">
@@ -1093,7 +1237,7 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
 
                     <div className="space-y-1.5">
                       <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider">
-                        Escribe tu reseña (Opcional, máximo 500 caracteres)
+                        Escribe tu Starpost (Opcional, máximo 500 caracteres)
                       </label>
                       <textarea
                         value={userReviewText}
@@ -1119,8 +1263,8 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
                           <span>Publicando...</span>
                         ) : (
                           <>
-                            <MessageSquare className="w-4 h-4" />
-                            <span>Publicar Reseña</span>
+                            <Star className="w-4 h-4 fill-current" />
+                            <span>Publicar Starpost</span>
                           </>
                         )}
                       </button>
@@ -1129,8 +1273,9 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
                 ) : (
                   <div className="bg-yellow-500/5 border border-yellow-500/10 rounded-xl p-4 space-y-3">
                     <div className="flex justify-between items-center">
-                      <span className="text-xs font-extrabold text-yellow-400 uppercase tracking-wider">
-                        Tu Calificación Registrada
+                      <span className="text-xs font-extrabold text-yellow-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <Star className="w-3.5 h-3.5 fill-current" />
+                        <span>Tu Starpost Registrado</span>
                       </span>
                       <button
                         onClick={handleDeleteResena}
@@ -1138,7 +1283,7 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
                         className="text-xs text-red-400 hover:text-red-300 transition flex items-center gap-1 font-bold uppercase tracking-wider disabled:opacity-40"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
-                        <span>Eliminar Reseña</span>
+                        <span>Eliminar Starpost</span>
                       </button>
                     </div>
 
@@ -1171,26 +1316,31 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
 
             </div>
 
-            {/* Reseñas de la comunidad */}
+            {/* Starposts de la comunidad */}
             <div className="space-y-4">
               <h3 className="text-sm font-extrabold uppercase tracking-widest text-zinc-400 flex items-center gap-2">
-                <MessageSquare className="w-4 h-4 text-[#ffbf00]" />
-                <span>Reseñas de la Comunidad ({resenasList.length})</span>
+                <Star className="w-4 h-4 text-[#ffbf00] fill-current" />
+                <span>Starposts de la Comunidad ({resenasList.length})</span>
               </h3>
 
               {resenasList.length === 0 ? (
                 <div className="bg-[#111116] border border-white/5 rounded-2xl p-8 text-center text-zinc-500">
-                  <p className="text-sm">Aún no hay reseñas de la comunidad para este personaje.</p>
-                  <p className="text-xs pt-1">¡Sé el primero en escribir tu reseña!</p>
+                  <p className="text-sm">Aún no hay Starposts de la comunidad para este personaje.</p>
+                  <p className="text-xs pt-1">¡Sé el primero en calificar y publicar tu Starpost!</p>
                 </div>
               ) : (
                 <div className="space-y-3.5">
                   {resenasList.map((resena) => {
                     const starsArr = Array.from({ length: 5 }, (_, i) => i + 1);
+                    const myReaction = userReactions[resena.id];
+                    const isReacting = !!isTogglingReaction[resena.id];
+                    const likes = resena.likes_count ?? 0;
+                    const dislikes = resena.dislikes_count ?? 0;
+
                     return (
                       <div 
                         key={resena.id} 
-                        className="bg-[#111116] border border-white/5 rounded-2xl p-4.5 space-y-3 shadow-md"
+                        className="bg-[#111116] border border-white/5 rounded-2xl p-4.5 space-y-3 shadow-md transition-colors"
                       >
                         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/5 pb-2.5">
                           {/* User info & Metadata badges */}
@@ -1280,6 +1430,70 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
                               {resena.review_text}
                             </p>
                           )}
+                        </div>
+
+                        {/* Like, Dislike & Replies Bar */}
+                        <div className="pt-2 border-t border-white/5 flex items-center justify-between gap-2">
+                          {/* BOTÓN RESPUESTAS / CONVERSACIÓN */}
+                          <button
+                            type="button"
+                            onClick={() => setActiveReplyStarpost(resena)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-zinc-400 hover:text-[#ffbf00] hover:bg-[#ffbf00]/10 border border-transparent hover:border-[#ffbf00]/20 transition cursor-pointer"
+                            title="Ver o responder a este Starpost"
+                          >
+                            <MessageSquare className="w-3.5 h-3.5" />
+                            <span>
+                              {repliesCountMap[resena.id] !== undefined
+                                ? repliesCountMap[resena.id] === 0
+                                  ? 'Responder'
+                                  : `${repliesCountMap[resena.id]} ${repliesCountMap[resena.id] === 1 ? 'respuesta' : 'respuestas'}`
+                                : (resena.replies_count || 0) > 0
+                                  ? `${resena.replies_count} ${resena.replies_count === 1 ? 'respuesta' : 'respuestas'}`
+                                  : 'Responder'}
+                            </span>
+                          </button>
+
+                          <div className="flex items-center gap-2">
+                            {/* LIKE BUTTON */}
+                            <button
+                              type="button"
+                              onClick={() => handleReactionToStarpost(resena.id, 'like')}
+                              disabled={isReacting}
+                              title={myReaction === 'like' ? 'Quitar Me gusta' : 'Me gusta'}
+                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                                myReaction === 'like'
+                                  ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 shadow-xs'
+                                  : 'text-zinc-400 hover:text-white hover:bg-white/5 border border-transparent'
+                              } ${isReacting ? 'opacity-50 cursor-wait' : ''}`}
+                            >
+                              <ThumbsUp 
+                                className={`w-3.5 h-3.5 transition-transform ${
+                                  myReaction === 'like' ? 'fill-emerald-400 scale-110' : ''
+                                }`} 
+                              />
+                              <span className="font-mono text-xs">{likes}</span>
+                            </button>
+
+                            {/* DISLIKE BUTTON */}
+                            <button
+                              type="button"
+                              onClick={() => handleReactionToStarpost(resena.id, 'dislike')}
+                              disabled={isReacting}
+                              title={myReaction === 'dislike' ? 'Quitar No me gusta' : 'No me gusta'}
+                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                                myReaction === 'dislike'
+                                  ? 'bg-rose-500/15 text-rose-400 border border-rose-500/30 shadow-xs'
+                                  : 'text-zinc-400 hover:text-white hover:bg-white/5 border border-transparent'
+                              } ${isReacting ? 'opacity-50 cursor-wait' : ''}`}
+                            >
+                              <ThumbsDown 
+                                className={`w-3.5 h-3.5 transition-transform ${
+                                  myReaction === 'dislike' ? 'fill-rose-400 scale-110' : ''
+                                }`} 
+                              />
+                              <span className="font-mono text-xs">{dislikes}</span>
+                            </button>
+                          </div>
                         </div>
                       </div>
                     );
@@ -1504,6 +1718,23 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
             </div>
           </div>
         </div>
+      )}
+
+      {/* MODAL DE RESPUESTAS A STARPOSTS (NIVEL 1 Y NIVEL 2) */}
+      {activeReplyStarpost && (
+        <StarpostRepliesModal
+          starpost={activeReplyStarpost}
+          onClose={() => setActiveReplyStarpost(null)}
+          currentUser={currentUser}
+          guestUserData={{
+            gender: getUserPreferences().gender || undefined,
+            nationality: getUserPreferences().nationality || undefined
+          }}
+          onRepliesCountChange={(starpostId, newCount) => {
+            setRepliesCountMap(prev => ({ ...prev, [starpostId]: newCount }));
+            setResenasList(prev => prev.map(r => r.id === starpostId ? { ...r, replies_count: newCount } : r));
+          }}
+        />
       )}
 
     </div>

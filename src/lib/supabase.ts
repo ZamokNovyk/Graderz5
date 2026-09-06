@@ -106,4 +106,46 @@ export const supabase = (supabaseUrl && supabaseAnonKey)
  * CREATE INDEX IF NOT EXISTS personajes_world_slug_idx ON public.personajes_world (personaje_slug);
  * ALTER TABLE public.personajes_world ENABLE ROW LEVEL SECURITY;
  * CREATE POLICY "Permitir lectura y escritura de personajes_world" ON public.personajes_world FOR ALL USING (true) WITH CHECK (true);
+ * 
+ * -- 5. TABLA 'personajes_resenas' (Starposts)
+ * -- Columnas acumuladoras para likes, dislikes y total de respuestas:
+ * ALTER TABLE public.personajes_resenas ADD COLUMN IF NOT EXISTS likes_count INTEGER DEFAULT 0;
+ * ALTER TABLE public.personajes_resenas ADD COLUMN IF NOT EXISTS dislikes_count INTEGER DEFAULT 0;
+ * ALTER TABLE public.personajes_resenas ADD COLUMN IF NOT EXISTS replies_count INTEGER DEFAULT 0;
+ * 
+ * -- 6. TABLA 'resenas_like_dislike' (Registro de reacciones a Starposts)
+ * CREATE TABLE IF NOT EXISTS public.resenas_like_dislike (
+ *   id BIGSERIAL PRIMARY KEY,
+ *   resena_id TEXT NOT NULL,
+ *   user_uid TEXT NOT NULL,
+ *   reaction TEXT NOT NULL CHECK (reaction IN ('like', 'dislike')),
+ *   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+ *   CONSTRAINT resenas_like_dislike_unique UNIQUE (resena_id, user_uid)
+ * );
+ * CREATE INDEX IF NOT EXISTS resenas_like_dislike_resena_idx ON public.resenas_like_dislike (resena_id);
+ * CREATE INDEX IF NOT EXISTS resenas_like_dislike_uid_idx ON public.resenas_like_dislike (user_uid);
+ * ALTER TABLE public.resenas_like_dislike ENABLE ROW LEVEL SECURITY;
+ * CREATE POLICY "Permitir lectura y escritura de recciones" ON public.resenas_like_dislike FOR ALL USING (true) WITH CHECK (true);
+ * 
+ * -- 7. TABLA 'starposts_respuestas' (Sistema de respuestas anidadas de 2 niveles)
+ * CREATE TABLE IF NOT EXISTS public.starposts_respuestas (
+ *   id BIGSERIAL PRIMARY KEY,
+ *   starpost_id TEXT NOT NULL,
+ *   parent_id BIGINT DEFAULT NULL, -- NULL si es Nivel 1; ID de la respuesta si es Nivel 2
+ *   user_uid TEXT NOT NULL,
+ *   user_name TEXT NOT NULL,
+ *   user_gender TEXT,
+ *   user_nationality TEXT,
+ *   is_anonymous BOOLEAN DEFAULT FALSE,
+ *   registered_with TEXT DEFAULT 'anonymous',
+ *   reply_to_user_name TEXT, -- Ej: '@user_y5PI5' cuando se responde a una respuesta previa
+ *   comment_text TEXT NOT NULL,
+ *   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+ * );
+ * CREATE INDEX IF NOT EXISTS starposts_respuestas_starpost_idx ON public.starposts_respuestas (starpost_id);
+ * CREATE INDEX IF NOT EXISTS starposts_respuestas_parent_idx ON public.starposts_respuestas (parent_id);
+ * CREATE INDEX IF NOT EXISTS starposts_respuestas_user_idx ON public.starposts_respuestas (user_uid);
+ * ALTER TABLE public.starposts_respuestas ENABLE ROW LEVEL SECURITY;
+ * CREATE POLICY "Permitir lectura publica de respuestas" ON public.starposts_respuestas FOR SELECT USING (true);
+ * CREATE POLICY "Permitir gestion de respuestas" ON public.starposts_respuestas FOR ALL USING (true) WITH CHECK (true);
  */

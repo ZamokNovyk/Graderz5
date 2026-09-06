@@ -358,3 +358,32 @@ export async function togglePersonajeActitud(params: {
     }
   };
 }
+
+/**
+ * Obtiene todas las interacciones/actitudes registradas por un usuario determinado.
+ */
+export async function getUserAllActitudes(userUid: string): Promise<PersonajeActitud[]> {
+  const cleanUid = userUid.trim();
+  if (!cleanUid) return [];
+
+  // 1. Intentar desde Supabase
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('personajes_actitud')
+        .select('*')
+        .or(`user_uid.eq.${cleanUid},uid.eq.${cleanUid}`)
+        .order('created_at', { ascending: false });
+
+      if (!error && Array.isArray(data)) {
+        return data as PersonajeActitud[];
+      }
+    } catch (e) {
+      console.warn('Error al consultar todas las actitudes del usuario en Supabase:', e);
+    }
+  }
+
+  // 2. Fallback local
+  const localList = getLocalActitudes();
+  return localList.filter(a => a.user_uid === cleanUid);
+}

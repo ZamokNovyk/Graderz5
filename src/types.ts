@@ -94,7 +94,35 @@ export interface PersonajeResena {
   registered_with: 'google' | 'anonymous';
   review_text?: string;
   stars: number;
+  likes_count?: number;
+  dislikes_count?: number;
+  replies_count?: number;
   created_at: string;
+}
+
+export interface StarpostReply {
+  id: string; // ej: 'rep_1725612345678_abcd' o id numérico de supabase convertido a string
+  starpost_id: string; // ID del Starpost original en personajes_resenas
+  parent_id?: string | null; // null si es Nivel 1; ID de la respuesta Nivel 1 si es Nivel 2
+  user_uid: string;
+  user_name: string;
+  user_gender?: string;
+  user_nationality?: string;
+  is_anonymous: boolean;
+  registered_with: 'google' | 'anonymous';
+  reply_to_user_name?: string | null; // ej: '@user_y5PI5' cuando es Nivel 2
+  comment_text: string;
+  created_at: string;
+}
+
+export type StarpostReactionType = 'like' | 'dislike';
+
+export interface ResenaLikeDislike {
+  id?: string;
+  resena_id: string; // ID del Starpost (ej: 'res_lalisa.manobal_...')
+  user_uid: string;
+  reaction: StarpostReactionType; // 'like' | 'dislike'
+  created_at?: string;
 }
 
 export interface CountryDemographics {
