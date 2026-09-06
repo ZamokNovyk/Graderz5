@@ -97,4 +97,6 @@ export interface PersonajeResena {
   created_at: string;
 }
 
+declare module 'globe.gl';
+
 

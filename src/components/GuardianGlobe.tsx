@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import * as THREE from 'three';
+import Globe from 'globe.gl';
 import { 
   Globe as GlobeIcon, 
   RotateCcw, 
@@ -12,43 +13,21 @@ import {
   Skull, 
   Heart, 
   Users, 
-  Info,
   MapPin,
   Moon,
   Sun,
   Layers
 } from 'lucide-react';
 import { CountryAudienceStats, GlobeLightPoint } from '../lib/audienceService';
-import { latLngToVector3 } from '../data/countryCoordinates';
 import { FlagImage } from './FlagImage';
 
-const COLOR_MAP: Record<string, string> = {
-  fan: '#facc15',
-  simp: '#f97316',
-  hater: '#c084fc',
-  conozco: '#38bdf8',
-  home: '#10b981'
-};
-
-// Texture loaders and cached instances from local /public folder
-let cachedDarkTexture: THREE.Texture | null = null;
-let cachedNightTexture: THREE.Texture | null = null;
-const textureLoader = new THREE.TextureLoader();
-
-function getEarthTexture(mode: 'dark' | 'night' = 'dark'): THREE.Texture {
-  if (mode === 'night') {
-    if (!cachedNightTexture) {
-      cachedNightTexture = textureLoader.load('/earth-night.jpg');
-      cachedNightTexture.colorSpace = THREE.SRGBColorSpace;
-    }
-    return cachedNightTexture;
-  }
-  if (!cachedDarkTexture) {
-    cachedDarkTexture = textureLoader.load('/earth-dark.jpg');
-    cachedDarkTexture.colorSpace = THREE.SRGBColorSpace;
-  }
-  return cachedDarkTexture;
+// Ensure global THREE is available for globe.gl submodules
+if (typeof window !== 'undefined') {
+  (window as any).THREE = THREE;
 }
+
+// In-memory cache for GeoJSON to prevent multiple fetches across tabs
+let cachedCountriesGeoJson: any = null;
 
 interface GuardianGlobeProps {
   stats: CountryAudienceStats[];
@@ -59,6 +38,26 @@ interface GuardianGlobeProps {
   onSelectCountry?: (country: string) => void;
 }
 
+type MapTextureMode = 'satellite' | 'night' | 'dark';
+
+const TEXTURE_URLS: Record<MapTextureMode, { globe: string; bump: string; name: string }> = {
+  satellite: {
+    globe: '/earth-blue-marble.jpg',
+    bump: '/earth-topology.png',
+    name: 'Satelital (Blue Marble)'
+  },
+  night: {
+    globe: '/earth-night.jpg',
+    bump: '/earth-topology.png',
+    name: 'Nocturno (Luces de Ciudades)'
+  },
+  dark: {
+    globe: '/earth-dark.jpg',
+    bump: '/earth-topology.png',
+    name: 'Topográfico Oscuro'
+  }
+};
+
 export const GuardianGlobe: React.FC<GuardianGlobeProps> = ({
   stats,
   lights,
@@ -68,20 +67,13 @@ export const GuardianGlobe: React.FC<GuardianGlobeProps> = ({
   onSelectCountry
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
-  const sceneRef = useRef<THREE.Scene | null>(null);
-  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
-  const globeGroupRef = useRef<THREE.Group | null>(null);
-  const earthMeshRef = useRef<THREE.Mesh | null>(null);
-  const lightsGroupRef = useRef<THREE.Group | null>(null);
-  const animationFrameId = useRef<number | null>(null);
+  const globeInstanceRef = useRef<any>(null);
 
   // Interaction State
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'fan' | 'simp' | 'hater' | 'conozco'>('all');
   const [autoRotate, setAutoRotate] = useState(true);
-  const [textureMode, setTextureMode] = useState<'dark' | 'night'>('dark');
-  const [hoveredPoint, setHoveredPoint] = useState<GlobeLightPoint | null>(null);
-  const [selectedCountryStats, setSelectedCountryStats] = useState<CountryAudienceStats | null>(null);
+  const [textureMode, setTextureMode] = useState<MapTextureMode>('satellite');
+  const [showBorders, setShowBorders] = useState(true);
 
   // Filtered lights
   const activeLights = useMemo(() => {
@@ -101,304 +93,215 @@ export const GuardianGlobe: React.FC<GuardianGlobeProps> = ({
     return counts;
   }, [stats, totalVotes]);
 
-  // Setup Three.js Scene
+  // Concentric pulsing radar rings for countries with votes
+  const ringsData = useMemo(() => {
+    return stats
+      .filter(s => s.totalInteractions > 0 || s.isHomeCountry)
+      .map(st => ({
+        lat: st.lat,
+        lng: st.lng,
+        maxR: Math.min(st.totalInteractions * 2.2 + 5, 18),
+        propagationSpeed: 1.4,
+        repeatPeriod: 1200,
+        color: () => st.isHomeCountry ? 'rgba(16, 185, 129, 0.85)' : 'rgba(249, 115, 22, 0.85)'
+      }));
+  }, [stats]);
+
+  // Labels layer for countries with votes
+  const labelsData = useMemo(() => {
+    return stats
+      .filter(s => s.totalInteractions > 0 || s.isHomeCountry)
+      .map(st => ({
+        lat: st.lat,
+        lng: st.lng,
+        text: `${st.country} (${st.totalInteractions})`,
+        size: 0.9,
+        color: st.isHomeCountry ? '#10b981' : '#facc15'
+      }));
+  }, [stats]);
+
+  // Initialize Globe.gl
   useEffect(() => {
     if (!containerRef.current) return;
-
     const container = containerRef.current;
-    const width = container.clientWidth || 400;
-    const height = container.clientHeight || 400;
-
-    // 1. Scene & Camera
-    const scene = new THREE.Scene();
-    sceneRef.current = scene;
-
-    const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
-    camera.position.z = 240;
-    cameraRef.current = camera;
-
-    // 2. Renderer
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
-    rendererRef.current = renderer;
-
     container.innerHTML = '';
-    container.appendChild(renderer.domElement);
 
-    // 3. Ambient & Directional Lights (Illuminates the continents vividly)
-    const ambientLight = new THREE.AmbientLight(0xffffff, 1.6);
-    scene.add(ambientLight);
+    const globe = new Globe(container)
+      .globeImageUrl(TEXTURE_URLS[textureMode].globe)
+      .bumpImageUrl(TEXTURE_URLS[textureMode].bump)
+      .backgroundColor('rgba(0,0,0,0)')
+      .atmosphereColor('#38bdf8')
+      .atmosphereAltitude(0.2)
+      .showAtmosphere(true)
+      .width(container.clientWidth || 400)
+      .height(container.clientHeight || 500)
+      // 1. Guardian Lights Points
+      .pointsData(activeLights)
+      .pointLat('lat')
+      .pointLng('lng')
+      .pointColor('color')
+      .pointAltitude(0.04)
+      .pointRadius(0.75)
+      .pointResolution(32)
+      .pointLabel((d: any) => `
+        <div style="background: rgba(10, 16, 31, 0.95); border: 1px solid ${d.color}; padding: 6px 12px; border-radius: 10px; color: #ffffff; font-family: system-ui, sans-serif; font-size: 12px; box-shadow: 0 0 15px ${d.color}66; pointer-events: none;">
+          <div style="font-weight: 700; color: ${d.color}; text-transform: uppercase; font-size: 11px;">
+            ${d.type === 'home' ? '🏠 País de Origen' : d.type}
+          </div>
+          <div style="font-weight: 600; font-size: 13px; margin-top: 2px;">${d.label}</div>
+          <div style="color: #94a3b8; font-size: 11px; margin-top: 1px;">📍 ${d.country}</div>
+        </div>
+      `)
+      .onPointClick((d: any) => {
+        if (onSelectCountry) onSelectCountry(d.country);
+        globe.pointOfView({ lat: d.lat, lng: d.lng, altitude: 1.5 }, 1200);
+      })
+      // 2. Concentric Radar Rings
+      .ringsData(ringsData)
+      .ringLat('lat')
+      .ringLng('lng')
+      .ringColor('color')
+      .ringMaxRadius('maxR')
+      .ringPropagationSpeed('propagationSpeed')
+      .ringRepeatPeriod('repeatPeriod')
+      // 3. Country Labels
+      .labelsData(labelsData)
+      .labelLat('lat')
+      .labelLng('lng')
+      .labelText('text')
+      .labelSize('size')
+      .labelColor('color')
+      .labelDotRadius(0.3)
+      .labelResolution(2);
 
-    const dirLight1 = new THREE.DirectionalLight(0xffffff, 1.8);
-    dirLight1.position.set(120, 100, 120);
-    scene.add(dirLight1);
+    globeInstanceRef.current = globe;
 
-    const dirLight2 = new THREE.DirectionalLight(0x38bdf8, 0.9);
-    dirLight2.position.set(-120, -60, -120);
-    scene.add(dirLight2);
+    // Configure Orbit Controls
+    const controls = globe.controls();
+    controls.autoRotate = autoRotate;
+    controls.autoRotateSpeed = 0.6;
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
 
-    // 4. Master Globe Group
-    const globeGroup = new THREE.Group();
-    globeGroup.rotation.x = 0.25; // Slight tilt
-    scene.add(globeGroup);
-    globeGroupRef.current = globeGroup;
+    // Set Initial Perspective View
+    globe.pointOfView({ lat: 15, lng: -40, altitude: 2.4 });
 
-    // 5. High-Definition Earth Texture (Served locally from /public at 0ms)
-    const earthTexture = getEarthTexture(textureMode);
-
-    // Inner Core Sphere with crisp continents and topography
-    const sphereGeo = new THREE.SphereGeometry(78, 64, 64);
-    const sphereMat = new THREE.MeshStandardMaterial({
-      map: earthTexture,
-      roughness: 0.55,
-      metalness: 0.1
-    });
-    const earthMesh = new THREE.Mesh(sphereGeo, sphereMat);
-    globeGroup.add(earthMesh);
-    earthMeshRef.current = earthMesh;
-
-    // Subtle grid wireframe for latitude/longitude celestial lines
-    const gridGeo = new THREE.SphereGeometry(78.2, 36, 24);
-    const gridMat = new THREE.MeshBasicMaterial({
-      color: 0x38bdf8,
-      wireframe: true,
-      transparent: true,
-      opacity: 0.08
-    });
-    const gridMesh = new THREE.Mesh(gridGeo, gridMat);
-    globeGroup.add(gridMesh);
-
-    // Glowing Atmosphere Ring
-    const atmosphereGeo = new THREE.SphereGeometry(82, 32, 32);
-    const atmosphereMat = new THREE.MeshBasicMaterial({
-      color: 0x38bdf8,
-      transparent: true,
-      opacity: 0.14,
-      side: THREE.BackSide
-    });
-    const atmosphere = new THREE.Mesh(atmosphereGeo, atmosphereMat);
-    globeGroup.add(atmosphere);
-
-    // Thin celestial latitude/longitude ring around globe
-    const ringGeo = new THREE.RingGeometry(86, 87, 64);
-    const ringMat = new THREE.MeshBasicMaterial({
-      color: 0xf97316,
-      transparent: true,
-      opacity: 0.22,
-      side: THREE.DoubleSide
-    });
-    const celestialRing = new THREE.Mesh(ringGeo, ringMat);
-    celestialRing.rotation.x = Math.PI / 2;
-    globeGroup.add(celestialRing);
-
-    // Dynamic Lights Group
-    const lightsGroup = new THREE.Group();
-    globeGroup.add(lightsGroup);
-    lightsGroupRef.current = lightsGroup;
-
-    // Interaction handlers (Drag to Rotate & Zoom)
-    let isDragging = false;
-    let previousMousePosition = { x: 0, y: 0 };
-
-    const handlePointerDown = (e: MouseEvent | TouchEvent) => {
-      isDragging = true;
-      const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-      const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
-      previousMousePosition = { x: clientX, y: clientY };
+    // Load Country Borders from local GeoJSON file
+    const applyGeoJson = (geo: any) => {
+      globe
+        .polygonsData(showBorders ? geo.features : [])
+        .polygonCapColor(() => 'rgba(0, 0, 0, 0.0)')
+        .polygonSideColor(() => 'rgba(56, 189, 248, 0.08)')
+        .polygonStrokeColor(() => 'rgba(56, 189, 248, 0.65)')
+        .polygonAltitude(0.006)
+        .polygonLabel(({ properties: d }: any) => `
+          <div style="background: rgba(10, 16, 31, 0.95); border: 1px solid rgba(56, 189, 248, 0.5); padding: 5px 10px; border-radius: 8px; color: white; font-family: system-ui, sans-serif; font-size: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.6); pointer-events: none;">
+            <b style="color: #38bdf8;">${d.NAME || d.ADMIN}</b> <span style="color: #94a3b8; font-size: 11px;">(${d.ISO_A2 || ''})</span>
+          </div>
+        `)
+        .onPolygonClick(({ properties: d }: any) => {
+          const countryName = d.NAME || d.ADMIN;
+          if (onSelectCountry) onSelectCountry(countryName);
+        });
     };
 
-    const handlePointerMove = (e: MouseEvent | TouchEvent) => {
-      if (!isDragging || !globeGroupRef.current) return;
-      const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-      const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    if (cachedCountriesGeoJson) {
+      applyGeoJson(cachedCountriesGeoJson);
+    } else {
+      fetch('/ne_110m_admin_0_countries.geojson')
+        .then(r => r.json())
+        .then(data => {
+          cachedCountriesGeoJson = data;
+          applyGeoJson(data);
+        })
+        .catch(err => {
+          console.warn('Could not load local country borders GeoJSON:', err);
+        });
+    }
 
-      const deltaX = clientX - previousMousePosition.x;
-      const deltaY = clientY - previousMousePosition.y;
-
-      globeGroupRef.current.rotation.y += deltaX * 0.008;
-      globeGroupRef.current.rotation.x += deltaY * 0.008;
-
-      previousMousePosition = { x: clientX, y: clientY };
-    };
-
-    const handlePointerUp = () => {
-      isDragging = false;
-    };
-
-    const handleWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      if (!cameraRef.current) return;
-      cameraRef.current.position.z = THREE.MathUtils.clamp(
-        cameraRef.current.position.z + e.deltaY * 0.2,
-        140,
-        340
-      );
-    };
-
-    const dom = renderer.domElement;
-    dom.addEventListener('mousedown', handlePointerDown);
-    window.addEventListener('mousemove', handlePointerMove);
-    window.addEventListener('mouseup', handlePointerUp);
-
-    dom.addEventListener('touchstart', handlePointerDown, { passive: true });
-    window.addEventListener('touchmove', handlePointerMove, { passive: true });
-    window.addEventListener('touchend', handlePointerUp);
-    dom.addEventListener('wheel', handleWheel, { passive: false });
-
-    // Handle Window Resize
+    // Resize Observer
     const handleResize = () => {
-      if (!containerRef.current || !rendererRef.current || !cameraRef.current) return;
-      const w = containerRef.current.clientWidth;
-      const h = containerRef.current.clientHeight;
-      cameraRef.current.aspect = w / h;
-      cameraRef.current.updateProjectionMatrix();
-      rendererRef.current.setSize(w, h);
+      if (containerRef.current && globeInstanceRef.current) {
+        globeInstanceRef.current
+          .width(containerRef.current.clientWidth)
+          .height(containerRef.current.clientHeight || 500);
+      }
     };
     window.addEventListener('resize', handleResize);
 
-    // Animation Loop
-    let clock = new THREE.Clock();
-    const animate = () => {
-      const elapsedTime = clock.getElapsedTime();
-
-      // Auto-rotation if not dragging
-      if (globeGroupRef.current && autoRotate && !isDragging) {
-        globeGroupRef.current.rotation.y += 0.0035;
-      }
-
-      // Animate pulsing lights and rings
-      if (lightsGroupRef.current) {
-        lightsGroupRef.current.children.forEach((child, index) => {
-          const pulse = Math.sin(elapsedTime * 3.5 + index * 0.8) * 0.25 + 1.0;
-          child.scale.set(pulse, pulse, pulse);
-        });
-      }
-
-      renderer.render(scene, camera);
-      animationFrameId.current = requestAnimationFrame(animate);
-    };
-    animate();
-
     return () => {
-      if (animationFrameId.current) cancelAnimationFrame(animationFrameId.current);
       window.removeEventListener('resize', handleResize);
-      dom.removeEventListener('mousedown', handlePointerDown);
-      window.removeEventListener('mousemove', handlePointerMove);
-      window.removeEventListener('mouseup', handlePointerUp);
-      dom.removeEventListener('touchstart', handlePointerDown);
-      window.removeEventListener('touchmove', handlePointerMove);
-      window.removeEventListener('touchend', handlePointerUp);
-      dom.removeEventListener('wheel', handleWheel);
-      renderer.dispose();
+      if (globeInstanceRef.current && globeInstanceRef.current._destructor) {
+        globeInstanceRef.current._destructor();
+      }
+      container.innerHTML = '';
+      globeInstanceRef.current = null;
     };
+  }, []);
+
+  // Update Points & Rings whenever data changes
+  useEffect(() => {
+    if (!globeInstanceRef.current) return;
+    globeInstanceRef.current
+      .pointsData(activeLights)
+      .ringsData(ringsData)
+      .labelsData(labelsData);
+  }, [activeLights, ringsData, labelsData]);
+
+  // Update Auto-Rotate
+  useEffect(() => {
+    if (!globeInstanceRef.current) return;
+    const controls = globeInstanceRef.current.controls();
+    if (controls) {
+      controls.autoRotate = autoRotate;
+    }
   }, [autoRotate]);
 
-  // Update Lights when filtered list changes
+  // Update Texture Mode
   useEffect(() => {
-    if (!lightsGroupRef.current) return;
-    const group = lightsGroupRef.current;
+    if (!globeInstanceRef.current) return;
+    globeInstanceRef.current
+      .globeImageUrl(TEXTURE_URLS[textureMode].globe)
+      .bumpImageUrl(TEXTURE_URLS[textureMode].bump);
+  }, [textureMode]);
 
-    // Clear previous light meshes
-    while (group.children.length > 0) {
-      const obj = group.children[0];
-      group.remove(obj);
-    }
+  // Update Borders Visibility
+  useEffect(() => {
+    if (!globeInstanceRef.current || !cachedCountriesGeoJson) return;
+    globeInstanceRef.current.polygonsData(showBorders ? cachedCountriesGeoJson.features : []);
+  }, [showBorders]);
 
-    const globeRadius = 78.5;
-
-    // 1. Plot each individual vote point (Guardian of the Lights style)
-    activeLights.forEach(light => {
-      const [x, y, z] = latLngToVector3(light.lat, light.lng, globeRadius);
-
-      const lightMeshGroup = new THREE.Group();
-      lightMeshGroup.position.set(x, y, z);
-      lightMeshGroup.lookAt(0, 0, 0);
-
-      // Core Glowing Particle
-      const coreGeo = new THREE.SphereGeometry(light.type === 'home' ? 2.2 : 1.4, 12, 12);
-      const coreMat = new THREE.MeshBasicMaterial({
-        color: new THREE.Color(light.color),
-        transparent: true,
-        opacity: 0.95
-      });
-      const core = new THREE.Mesh(coreGeo, coreMat);
-      lightMeshGroup.add(core);
-
-      // Soft Luminous Glow Halo
-      const haloGeo = new THREE.RingGeometry(1.6, light.type === 'home' ? 4.5 : 3.2, 16);
-      const haloMat = new THREE.MeshBasicMaterial({
-        color: new THREE.Color(light.color),
-        transparent: true,
-        opacity: 0.45,
-        side: THREE.DoubleSide
-      });
-      const halo = new THREE.Mesh(haloGeo, haloMat);
-      lightMeshGroup.add(halo);
-
-      group.add(lightMeshGroup);
-    });
-
-    // 2. Add pulsing Radar Pings for active countries
-    stats.forEach(st => {
-      if (st.totalInteractions <= 0 && !st.isHomeCountry) return;
-      const [cx, cy, cz] = latLngToVector3(st.lat, st.lng, globeRadius);
-
-      const beaconGroup = new THREE.Group();
-      beaconGroup.position.set(cx, cy, cz);
-      beaconGroup.lookAt(0, 0, 0);
-
-      const ringGeo = new THREE.RingGeometry(3.5, 5.0, 24);
-      const ringColor = st.isHomeCountry ? 0x10b981 : 0xf97316;
-      const ringMat = new THREE.MeshBasicMaterial({
-        color: ringColor,
-        transparent: true,
-        opacity: 0.6,
-        side: THREE.DoubleSide
-      });
-      const ring = new THREE.Mesh(ringGeo, ringMat);
-      beaconGroup.add(ring);
-
-      group.add(beaconGroup);
-    });
-  }, [activeLights, stats]);
-
-  // Controls
-  const handleZoom = (delta: number) => {
-    if (!cameraRef.current) return;
-    cameraRef.current.position.z = THREE.MathUtils.clamp(
-      cameraRef.current.position.z + delta,
-      140,
-      340
-    );
+  // Zoom Handlers
+  const handleZoom = (deltaAlt: number) => {
+    if (!globeInstanceRef.current) return;
+    const pov = globeInstanceRef.current.pointOfView();
+    const nextAlt = Math.max(0.6, Math.min(3.5, pov.altitude + deltaAlt));
+    globeInstanceRef.current.pointOfView({ ...pov, altitude: nextAlt }, 350);
   };
 
   const handleResetView = () => {
-    if (!cameraRef.current || !globeGroupRef.current) return;
-    cameraRef.current.position.z = 240;
-    globeGroupRef.current.rotation.set(0.25, 0, 0);
+    if (!globeInstanceRef.current) return;
+    globeInstanceRef.current.pointOfView({ lat: 15, lng: -40, altitude: 2.4 }, 800);
   };
 
-  const toggleTextureMode = () => {
-    const nextMode = textureMode === 'dark' ? 'night' : 'dark';
-    setTextureMode(nextMode);
-    if (earthMeshRef.current) {
-      const newTex = getEarthTexture(nextMode);
-      (earthMeshRef.current.material as THREE.MeshStandardMaterial).map = newTex;
-      (earthMeshRef.current.material as THREE.MeshStandardMaterial).needsUpdate = true;
-    }
+  const cycleTexture = () => {
+    setTextureMode(prev => {
+      if (prev === 'satellite') return 'night';
+      if (prev === 'night') return 'dark';
+      return 'satellite';
+    });
   };
 
   return (
     <div className="space-y-6">
       
-      {/* Header card with guardian quote and explanation */}
-      <div className="bg-[#111116] border border-white/5 rounded-2xl p-5 sm:p-6 shadow-xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/5 rounded-full blur-3xl pointer-events-none" />
-        
+      {/* Header Info Panel */}
+      <div className="bg-[#111116] border border-white/5 rounded-2xl p-6 shadow-xl relative overflow-hidden">
+        <div className="absolute -right-10 -bottom-10 w-48 h-48 bg-amber-500/5 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -left-10 -top-10 w-48 h-48 bg-sky-500/5 rounded-full blur-3xl pointer-events-none" />
+
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             <div className="flex items-center gap-2">
               <span className="p-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400">
                 <GlobeIcon className="w-4 h-4" />
@@ -442,11 +345,11 @@ export const GuardianGlobe: React.FC<GuardianGlobeProps> = ({
             onClick={() => setSelectedFilter('fan')}
             className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
               selectedFilter === 'fan'
-                ? 'bg-[#facc15] text-black shadow-[0_0_15px_rgba(250,204,21,0.3)]'
-                : 'bg-white/5 text-zinc-400 hover:text-[#facc15] hover:bg-white/10'
+                ? 'bg-[#facc15] text-black shadow-[0_0_15px_rgba(250,204,21,0.35)]'
+                : 'bg-white/5 text-zinc-400 hover:text-amber-300 hover:bg-white/10'
             }`}
           >
-            <Heart className="w-3.5 h-3.5 fill-[#facc15] text-[#facc15]" />
+            <Heart className="w-3.5 h-3.5 fill-current" />
             <span>Fans ({filterCounts.fan})</span>
           </button>
 
@@ -458,7 +361,7 @@ export const GuardianGlobe: React.FC<GuardianGlobeProps> = ({
                 : 'bg-white/5 text-zinc-400 hover:text-orange-400 hover:bg-white/10'
             }`}
           >
-            <Flame className="w-3.5 h-3.5 fill-orange-500 text-orange-500" />
+            <Flame className="w-3.5 h-3.5 fill-current" />
             <span>SIMPs ({filterCounts.simp})</span>
           </button>
 
@@ -489,20 +392,20 @@ export const GuardianGlobe: React.FC<GuardianGlobeProps> = ({
       </div>
 
       {/* 3D Globe Stage Container */}
-      <div className="relative bg-[#0b0b10] border border-white/10 rounded-3xl overflow-hidden shadow-2xl flex flex-col items-center justify-center min-h-[440px] sm:min-h-[500px]">
+      <div className="relative bg-[#020308] border border-white/10 rounded-3xl overflow-hidden shadow-2xl flex flex-col items-center justify-center min-h-[460px] sm:min-h-[520px]">
         
         {/* Background cosmic radial effects */}
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(56,189,248,0.06)_0%,transparent_70%)] pointer-events-none" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom,rgba(249,115,22,0.05)_0%,transparent_60%)] pointer-events-none" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(56,189,248,0.08)_0%,transparent_70%)] pointer-events-none" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom,rgba(249,115,22,0.06)_0%,transparent_60%)] pointer-events-none" />
 
         {/* 3D Canvas Mount */}
         <div 
           ref={containerRef} 
-          className="w-full h-[440px] sm:h-[500px] cursor-grab active:cursor-grabbing relative z-10"
+          className="w-full h-[460px] sm:h-[520px] cursor-grab active:cursor-grabbing relative z-10"
         />
 
         {/* Top-Right Floating Control Bar */}
-        <div className="absolute top-4 right-4 z-20 flex flex-col gap-2 bg-[#121218]/90 backdrop-blur-md border border-white/10 p-1.5 rounded-2xl shadow-xl">
+        <div className="absolute top-4 right-4 z-20 flex flex-col gap-2 bg-[#0a101f]/85 backdrop-blur-md border border-white/10 p-1.5 rounded-2xl shadow-xl">
           <button
             onClick={() => setAutoRotate(!autoRotate)}
             title={autoRotate ? 'Pausar rotación automática' : 'Reanudar rotación automática'}
@@ -514,7 +417,7 @@ export const GuardianGlobe: React.FC<GuardianGlobeProps> = ({
           </button>
 
           <button
-            onClick={() => handleZoom(-30)}
+            onClick={() => handleZoom(-0.4)}
             title="Acercar (Zoom In)"
             className="p-2 rounded-xl text-zinc-400 hover:text-white bg-white/5 hover:bg-white/10 transition-all cursor-pointer"
           >
@@ -522,7 +425,7 @@ export const GuardianGlobe: React.FC<GuardianGlobeProps> = ({
           </button>
 
           <button
-            onClick={() => handleZoom(30)}
+            onClick={() => handleZoom(0.4)}
             title="Alejar (Zoom Out)"
             className="p-2 rounded-xl text-zinc-400 hover:text-white bg-white/5 hover:bg-white/10 transition-all cursor-pointer"
           >
@@ -538,26 +441,38 @@ export const GuardianGlobe: React.FC<GuardianGlobeProps> = ({
           </button>
 
           <button
-            onClick={toggleTextureMode}
-            title={textureMode === 'dark' ? 'Cambiar a Mapa Nocturno (Luces de ciudades de la Tierra)' : 'Cambiar a Mapa Topográfico Oscuro'}
+            onClick={() => setShowBorders(!showBorders)}
+            title={showBorders ? 'Ocultar fronteras geopolíticas' : 'Mostrar fronteras geopolíticas'}
+            className={`p-2 rounded-xl transition-all cursor-pointer ${
+              showBorders ? 'text-cyan-400 bg-cyan-500/10' : 'text-zinc-400 hover:text-white bg-white/5'
+            }`}
+          >
+            <Layers className="w-4 h-4" />
+          </button>
+
+          <button
+            onClick={cycleTexture}
+            title={`Textura actual: ${TEXTURE_URLS[textureMode].name}. Clic para cambiar.`}
             className="p-2 rounded-xl text-zinc-400 hover:text-white bg-white/5 hover:bg-white/10 transition-all cursor-pointer flex items-center justify-center border-t border-white/5 mt-0.5"
           >
-            {textureMode === 'dark' ? (
-              <Moon className="w-4 h-4 text-sky-400" />
+            {textureMode === 'satellite' ? (
+              <Sun className="w-4 h-4 text-emerald-400" />
+            ) : textureMode === 'night' ? (
+              <Moon className="w-4 h-4 text-amber-400" />
             ) : (
-              <Sun className="w-4 h-4 text-amber-400" />
+              <GlobeIcon className="w-4 h-4 text-sky-400" />
             )}
           </button>
         </div>
 
         {/* Bottom instructions badge */}
         <div className="absolute bottom-4 left-4 right-4 z-20 pointer-events-none flex items-center justify-between">
-          <div className="bg-[#121218]/85 backdrop-blur-md border border-white/10 px-3 py-1.5 rounded-xl text-[11px] text-zinc-400 flex items-center gap-2">
+          <div className="bg-[#0a101f]/85 backdrop-blur-md border border-white/10 px-3 py-1.5 rounded-xl text-[11px] text-zinc-400 flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-            <span>Arrastra para girar · Rueda para zoom</span>
+            <span>Arrastra para girar · Rueda para zoom · {TEXTURE_URLS[textureMode].name}</span>
           </div>
 
-          <div className="hidden sm:flex items-center gap-3 bg-[#121218]/85 backdrop-blur-md border border-white/10 px-3 py-1.5 rounded-xl text-[11px] text-zinc-400">
+          <div className="hidden sm:flex items-center gap-3 bg-[#0a101f]/85 backdrop-blur-md border border-white/10 px-3 py-1.5 rounded-xl text-[11px] text-zinc-400">
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#facc15]" /> Fan</span>
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#f97316]" /> Simp</span>
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#c084fc]" /> Hater</span>
