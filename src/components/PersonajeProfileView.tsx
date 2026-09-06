@@ -833,62 +833,72 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
       <div className="bg-[#0e0e13] border border-white/5 rounded-2xl p-1 flex overflow-x-auto gap-1 scrollbar-none max-w-3xl mx-auto">
         <button
           onClick={() => setActiveTab('informacion')}
-          className={`flex-1 min-w-[105px] py-3 rounded-xl text-xs font-semibold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+          className={`py-3 px-3.5 sm:px-0 rounded-xl text-xs font-semibold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
             activeTab === 'informacion'
-              ? 'text-red-500 bg-red-500/10 border border-red-500/25 shadow-inner'
-              : 'text-zinc-400 hover:text-white'
+              ? 'flex-1 sm:flex-1 text-red-500 bg-red-500/10 border border-red-500/25 shadow-inner'
+              : 'flex-initial sm:flex-1 text-zinc-400 hover:text-white'
           }`}
         >
-          <BookOpen className="w-4 h-4" />
-          <span>Información</span>
+          <BookOpen className="w-4 h-4 shrink-0" />
+          <span className={activeTab === 'informacion' ? 'inline' : 'hidden sm:inline'}>
+            Información
+          </span>
         </button>
 
         <button
           onClick={() => setActiveTab('resenas')}
-          className={`flex-1 min-w-[105px] py-3 rounded-xl text-xs font-semibold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+          className={`py-3 px-3.5 sm:px-0 rounded-xl text-xs font-semibold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
             activeTab === 'resenas'
-              ? 'text-red-500 bg-red-500/10 border border-red-500/25 shadow-inner'
-              : 'text-zinc-400 hover:text-white'
+              ? 'flex-1 sm:flex-1 text-red-500 bg-red-500/10 border border-red-500/25 shadow-inner'
+              : 'flex-initial sm:flex-1 text-zinc-400 hover:text-white'
           }`}
         >
-          <Star className="w-4 h-4" />
-          <span>Starposts</span>
+          <Star className="w-4 h-4 shrink-0" />
+          <span className={activeTab === 'resenas' ? 'inline' : 'hidden sm:inline'}>
+            Starposts
+          </span>
         </button>
 
         <button
           onClick={() => setActiveTab('ship')}
-          className={`flex-1 min-w-[105px] py-3 rounded-xl text-xs font-semibold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+          className={`py-3 px-3.5 sm:px-0 rounded-xl text-xs font-semibold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
             activeTab === 'ship'
-              ? 'text-red-500 bg-red-500/10 border border-red-500/25 shadow-inner'
-              : 'text-zinc-400 hover:text-white'
+              ? 'flex-1 sm:flex-1 text-red-500 bg-red-500/10 border border-red-500/25 shadow-inner'
+              : 'flex-initial sm:flex-1 text-zinc-400 hover:text-white'
           }`}
         >
-          <Flame className="w-4 h-4" />
-          <span>Ship</span>
+          <Flame className="w-4 h-4 shrink-0" />
+          <span className={activeTab === 'ship' ? 'inline' : 'hidden sm:inline'}>
+            Ship
+          </span>
         </button>
 
         <button
           onClick={() => setActiveTab('estadistica')}
-          className={`flex-1 min-w-[105px] py-3 rounded-xl text-xs font-semibold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+          className={`py-3 px-3.5 sm:px-0 rounded-xl text-xs font-semibold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
             activeTab === 'estadistica'
-              ? 'text-red-500 bg-red-500/10 border border-red-500/25 shadow-inner'
-              : 'text-zinc-400 hover:text-white'
+              ? 'flex-1 sm:flex-1 text-red-500 bg-red-500/10 border border-red-500/25 shadow-inner'
+              : 'flex-initial sm:flex-1 text-zinc-400 hover:text-white'
           }`}
         >
-          <BarChart3 className="w-4 h-4" />
-          <span>Estadística</span>
+          <BarChart3 className="w-4 h-4 shrink-0" />
+          <span className={activeTab === 'estadistica' ? 'inline' : 'hidden sm:inline'}>
+            Estadística
+          </span>
         </button>
 
         <button
           onClick={() => setActiveTab('radar')}
-          className={`flex-1 min-w-[105px] py-3 rounded-xl text-xs font-semibold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+          className={`py-3 px-3.5 sm:px-0 rounded-xl text-xs font-semibold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
             activeTab === 'radar'
-              ? 'text-red-500 bg-red-500/10 border border-red-500/25 shadow-inner'
-              : 'text-zinc-400 hover:text-white'
+              ? 'flex-1 sm:flex-1 text-red-500 bg-red-500/10 border border-red-500/25 shadow-inner'
+              : 'flex-initial sm:flex-1 text-zinc-400 hover:text-white'
           }`}
         >
-          <Globe className="w-4 h-4" />
-          <span>Radar</span>
+          <Globe className="w-4 h-4 shrink-0" />
+          <span className={activeTab === 'radar' ? 'inline' : 'hidden sm:inline'}>
+            Radar
+          </span>
         </button>
       </div>
 

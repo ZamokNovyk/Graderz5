@@ -561,13 +561,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           <span className={activeTab === 'interacciones' ? 'inline' : 'hidden sm:inline'}>
             Interacciones
           </span>
-          {actitudes.length > 0 && (
-            <span className={`text-[10px] font-black px-1.5 py-0.2 rounded-full ${
-              activeTab === 'interacciones' ? 'bg-white/20 text-white' : 'bg-red-500/20 text-red-400'
-            }`}>
-              {actitudes.length}
-            </span>
-          )}
         </button>
 
         <button
@@ -584,13 +577,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           <span className={activeTab === 'starspost' ? 'inline' : 'hidden sm:inline'}>
             Starspost
           </span>
-          {resenas.length > 0 && (
-            <span className={`text-[10px] font-black px-1.5 py-0.2 rounded-full ${
-              activeTab === 'starspost' ? 'bg-white/20 text-white' : 'bg-red-500/20 text-red-400'
-            }`}>
-              {resenas.length}
-            </span>
-          )}
         </button>
       </div>
 
@@ -832,26 +818,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 </button>
               );
             })}
-          </div>
-
-          {/* Division Header Banner */}
-          <div className="bg-[#121217] border border-white/10 rounded-2xl p-4 flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              {React.createElement(divisionMeta[activeDivision].icon, {
-                className: `w-5 h-5 ${divisionMeta[activeDivision].colorText}`
-              })}
-              <div>
-                <h4 className="text-sm font-bold text-white uppercase tracking-wide">
-                  Rastro de {divisionMeta[activeDivision].label}
-                </h4>
-                <p className="text-xs text-zinc-400">
-                  {divisionMeta[activeDivision].desc}
-                </p>
-              </div>
-            </div>
-            <span className={`text-xs font-bold px-3 py-1 rounded-full border ${divisionMeta[activeDivision].bgBadge} ${divisionMeta[activeDivision].colorText} ${divisionMeta[activeDivision].borderBadge}`}>
-              {filteredActitudes.length} personajes
-            </span>
           </div>
 
           {/* Content: List of interacted personajes */}
