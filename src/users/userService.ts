@@ -11,6 +11,18 @@ export interface UserProfile {
   nationality?: string;
   createdAt?: string;
   lastLogin?: string;
+  actitudes_cache?: {
+    fan?: string[];
+    simp?: string[];
+    hater?: string[];
+    conozco?: string[];
+  };
+  actitudes_stats?: {
+    fan?: number;
+    simp?: number;
+    hater?: number;
+    conozco?: number;
+  };
 }
 
 /**
@@ -121,6 +133,8 @@ export async function getUserProfileDetails(uid: string): Promise<UserProfile | 
           nationality: data.nationality ? String(data.nationality) : 'No especificada',
           createdAt: data.created_at ? String(data.created_at) : undefined,
           lastLogin: data.last_login ? String(data.last_login) : undefined,
+          actitudes_cache: data.actitudes_cache || undefined,
+          actitudes_stats: data.actitudes_stats || undefined,
         };
       }
     } catch (e) {

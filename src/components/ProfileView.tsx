@@ -30,7 +30,7 @@ import {
   Trash2
 } from 'lucide-react';
 import { User, updateProfile } from '../lib/firebase';
-import { saveUserToSupabase, checkUsernameAvailability, getUserProfileDetails } from '../users/userService';
+import { saveUserToSupabase, checkUsernameAvailability, getUserProfileDetails, UserProfile } from '../users/userService';
 import { 
   getUserPreferences, 
   saveUserPreferences, 
@@ -92,6 +92,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   });
 
   // Interacciones & Starspost data state
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [actitudes, setActitudes] = useState<PersonajeActitud[]>([]);
   const [resenas, setResenas] = useState<PersonajeResena[]>([]);
   const [userReactions, setUserReactions] = useState<Record<string, StarpostReactionType>>({});
@@ -136,6 +137,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       setUsernameInput(currentUser.displayName || '');
       getUserProfileDetails(currentUser.uid).then(profile => {
         if (profile) {
+          setUserProfile(profile);
           if (profile.gender === 'femenino') {
             setGender('femenino');
           } else {
@@ -436,8 +438,21 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     }
   };
 
-  // Filter attitudes by active division
-  const filteredActitudes = actitudes.filter(a => a.actitud === activeDivision);
+  // Filter attitudes by active division, falling back to cache if actitudes list is empty/loading
+  const cachedSlugs = userProfile?.actitudes_cache?.[activeDivision];
+  const filteredActitudes = actitudes.length > 0
+    ? actitudes.filter(a => a.actitud === activeDivision)
+    : (Array.isArray(cachedSlugs) ? cachedSlugs.map((slug, idx) => ({
+        id: `cache_${slug}_${idx}`,
+        personaje_slug: slug,
+        user_uid: effectiveUid,
+        user_name: currentUser?.displayName || 'Usuario',
+        actitud: activeDivision,
+        fecha: '',
+        hora: '',
+        is_anonymous: false,
+        created_at: ''
+      })) : []);
 
   const divisionMeta: Record<InteractionDivision, { label: string; icon: any; colorText: string; bgBadge: string; borderBadge: string; desc: string }> = {
     fan: {
@@ -769,7 +784,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               const meta = divisionMeta[div];
               const IconComp = meta.icon;
               const isSelected = activeDivision === div;
-              const count = actitudes.filter(a => a.actitud === div).length;
+              const cachedCount = userProfile?.actitudes_stats?.[div];
+              const count = actitudes.length > 0
+                ? actitudes.filter(a => a.actitud === div).length
+                : (typeof cachedCount === 'number' ? cachedCount : 0);
 
               return (
                 <button
@@ -799,7 +817,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           </div>
 
           {/* Content: List of interacted personajes */}
-          {isLoadingInteractions ? (
+          {isLoadingInteractions && filteredActitudes.length === 0 ? (
             <div className="bg-[#121217] border border-white/10 rounded-2xl p-12 text-center space-y-3">
               <div className="w-8 h-8 border-3 border-red-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
               <p className="text-xs text-zinc-400 uppercase tracking-wider">Cargando interacciones...</p>
