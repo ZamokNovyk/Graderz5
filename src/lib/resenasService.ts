@@ -589,32 +589,46 @@ export async function toggleStarpostReaction(params: {
 }
 
 /**
- * Obtiene todas las reseñas/Starsposts realizadas por un usuario determinado.
+ * Obtiene todas las reseñas/Starsposts realizadas por un usuario determinado con soporte para paginación.
  */
-export async function getUserAllResenas(userUid: string): Promise<PersonajeResena[]> {
+export async function getUserAllResenas(
+  userUid: string,
+  limit?: number,
+  offset: number = 0
+): Promise<PersonajeResena[]> {
   const cleanUid = userUid.trim();
   if (!cleanUid) return [];
 
   // 1. Intentar desde Supabase
   if (supabase) {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('personajes_resenas')
         .select('*')
         .eq('user_uid', cleanUid)
         .order('created_at', { ascending: false });
 
+      if (typeof limit === 'number') {
+        query = query.range(offset, offset + limit - 1);
+      }
+
+      const { data, error } = await query;
+
       if (!error && Array.isArray(data)) {
         return data as PersonajeResena[];
       }
     } catch (e) {
-      console.warn('Error al consultar todas las reseñas del usuario en Supabase:', e);
+      console.warn('Error al consultar reseñas del usuario en Supabase:', e);
     }
   }
 
   // 2. Fallback local
   const localList = getLocalResenas();
-  return localList.filter(r => r.user_uid === cleanUid);
+  const filtered = localList.filter(r => r.user_uid === cleanUid);
+  if (typeof limit === 'number') {
+    return filtered.slice(offset, offset + limit);
+  }
+  return filtered;
 }
 
 /**

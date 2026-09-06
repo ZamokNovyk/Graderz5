@@ -95,6 +95,9 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [actitudes, setActitudes] = useState<PersonajeActitud[]>([]);
   const [resenas, setResenas] = useState<PersonajeResena[]>([]);
+  const [resenasOffset, setResenasOffset] = useState(0);
+  const [hasMoreResenas, setHasMoreResenas] = useState(true);
+  const [isLoadingMoreResenas, setIsLoadingMoreResenas] = useState(false);
   const [userReactions, setUserReactions] = useState<Record<string, StarpostReactionType>>({});
   const [isTogglingReaction, setIsTogglingReaction] = useState<Record<string, boolean>>({});
   const [activeReplyStarpost, setActiveReplyStarpost] = useState<PersonajeResena | null>(null);
@@ -180,21 +183,22 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       });
   }, [effectiveUid, activeTab]);
 
-  // Fetch user starsposts (reseñas)
-  useEffect(() => {
+  const loadInitialResenas = () => {
     if (!effectiveUid) return;
     setIsLoadingResenas(true);
-    getUserAllResenas(effectiveUid)
+    getUserAllResenas(effectiveUid, 10, 0)
       .then(list => {
         setResenas(list);
+        setResenasOffset(list.length);
+        setHasMoreResenas(list.length === 10);
         if (list.length > 0) {
           const ids = list.map(r => r.id);
           getUserReactionsForStarposts(effectiveUid, ids).then(map => {
-            setUserReactions(map);
+            setUserReactions(prev => ({ ...prev, ...map }));
           }).catch(() => {});
 
           getRepliesCountsForStarposts(ids).then(map => {
-            setRepliesCountMap(map);
+            setRepliesCountMap(prev => ({ ...prev, ...map }));
           }).catch(() => {});
         }
       })
@@ -204,6 +208,43 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       .finally(() => {
         setIsLoadingResenas(false);
       });
+  };
+
+  const loadMoreResenas = () => {
+    if (!effectiveUid || isLoadingMoreResenas || !hasMoreResenas) return;
+    setIsLoadingMoreResenas(true);
+    getUserAllResenas(effectiveUid, 10, resenasOffset)
+      .then(list => {
+        if (list.length > 0) {
+          setResenas(prev => [...prev, ...list]);
+          setResenasOffset(prev => prev + list.length);
+          setHasMoreResenas(list.length === 10);
+
+          const ids = list.map(r => r.id);
+          getUserReactionsForStarposts(effectiveUid, ids).then(map => {
+            setUserReactions(prev => ({ ...prev, ...map }));
+          }).catch(() => {});
+
+          getRepliesCountsForStarposts(ids).then(map => {
+            setRepliesCountMap(prev => ({ ...prev, ...map }));
+          }).catch(() => {});
+        } else {
+          setHasMoreResenas(false);
+        }
+      })
+      .catch(err => {
+        console.warn('Error al cargar más reseñas:', err);
+      })
+      .finally(() => {
+        setIsLoadingMoreResenas(false);
+      });
+  };
+
+  // Fetch user starsposts (reseñas)
+  useEffect(() => {
+    if (activeTab === 'starspost') {
+      loadInitialResenas();
+    }
   }, [effectiveUid, activeTab]);
 
   // Check username availability live debounce
@@ -911,7 +952,9 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               </div>
             </div>
             <span className="text-xs font-bold px-3 py-1 rounded-full bg-red-500/10 text-red-400 border border-red-500/30">
-              {resenas.length} publicaciones
+              {userProfile?.actitudes_stats?.starposts !== undefined 
+                ? `${userProfile.actitudes_stats.starposts} ${userProfile.actitudes_stats.starposts === 1 ? 'publicación' : 'publicaciones'}`
+                : `${resenas.length} ${resenas.length === 1 ? 'publicación' : 'publicaciones'}`}
             </span>
           </div>
 
@@ -1085,6 +1128,25 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                   </div>
                 );
               })}
+
+              {/* BOTÓN VER MÁS */}
+              {hasMoreResenas && (
+                <button
+                  type="button"
+                  onClick={loadMoreResenas}
+                  disabled={isLoadingMoreResenas}
+                  className="w-full py-3 mt-2 rounded-xl bg-zinc-800/40 hover:bg-zinc-800/85 border border-white/5 hover:border-white/10 text-xs font-bold text-zinc-300 hover:text-white transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isLoadingMoreResenas ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin"></div>
+                      <span>Cargando más Starsposts...</span>
+                    </>
+                  ) : (
+                    <span>Ver más Starsposts</span>
+                  )}
+                </button>
+              )}
             </div>
           )}
         </div>
