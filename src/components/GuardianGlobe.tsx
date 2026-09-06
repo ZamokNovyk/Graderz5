@@ -4,8 +4,6 @@ import Globe from 'globe.gl';
 import { 
   Globe as GlobeIcon, 
   RotateCcw, 
-  Play, 
-  Pause, 
   ZoomIn, 
   ZoomOut, 
   Sparkles, 
@@ -131,7 +129,7 @@ export const GuardianGlobe: React.FC<GuardianGlobeProps> = ({
   // Interaction State
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'fan' | 'simp' | 'hater' | 'conozco'>('all');
   const [selectedGender, setSelectedGender] = useState<'all' | 'm' | 'f'>('all');
-  const [autoRotate, setAutoRotate] = useState(true);
+  const [autoRotate, setAutoRotate] = useState(false);
   const [textureMode, setTextureMode] = useState<MapTextureMode>('satellite');
   const [showBorders, setShowBorders] = useState(true);
 
@@ -317,11 +315,15 @@ export const GuardianGlobe: React.FC<GuardianGlobeProps> = ({
     globeInstanceRef.current = globe;
 
     // Configure Orbit Controls
+    // Configure Orbit Controls & Deep Zoom
     const controls = globe.controls();
     controls.autoRotate = autoRotate;
     controls.autoRotateSpeed = 0.6;
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
+    // Allow zooming in much closer to the ground (default is often 100+, minDistance allows close-up examination)
+    controls.minDistance = 101.5;
+    controls.maxDistance = 600;
 
     // Set Initial Perspective View
     globe.pointOfView({ lat: 15, lng: -40, altitude: 2.4 });
@@ -410,12 +412,12 @@ export const GuardianGlobe: React.FC<GuardianGlobeProps> = ({
     globeInstanceRef.current.polygonsData(showBorders ? cachedCountriesGeoJson.features : []);
   }, [showBorders]);
 
-  // Zoom Handlers
+  // Zoom Handlers - allows deep close-up examination down to 0.08 altitude
   const handleZoom = (deltaAlt: number) => {
     if (!globeInstanceRef.current) return;
     const pov = globeInstanceRef.current.pointOfView();
-    const nextAlt = Math.max(0.6, Math.min(3.5, pov.altitude + deltaAlt));
-    globeInstanceRef.current.pointOfView({ ...pov, altitude: nextAlt }, 350);
+    const nextAlt = Math.max(0.08, Math.min(3.5, pov.altitude + deltaAlt));
+    globeInstanceRef.current.pointOfView({ ...pov, altitude: nextAlt }, 300);
   };
 
   const handleResetView = () => {
@@ -590,17 +592,7 @@ export const GuardianGlobe: React.FC<GuardianGlobeProps> = ({
         {/* Top-Right Floating Control Bar */}
         <div className="absolute top-4 right-4 z-20 flex flex-col gap-2 bg-[#0a101f]/85 backdrop-blur-md border border-white/10 p-1.5 rounded-2xl shadow-xl">
           <button
-            onClick={() => setAutoRotate(!autoRotate)}
-            title={autoRotate ? 'Pausar rotación automática' : 'Reanudar rotación automática'}
-            className={`p-2 rounded-xl transition-all cursor-pointer ${
-              autoRotate ? 'text-amber-400 bg-amber-500/10' : 'text-zinc-400 hover:text-white bg-white/5'
-            }`}
-          >
-            {autoRotate ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-          </button>
-
-          <button
-            onClick={() => handleZoom(-0.4)}
+            onClick={() => handleZoom(-0.35)}
             title="Acercar (Zoom In)"
             className="p-2 rounded-xl text-zinc-400 hover:text-white bg-white/5 hover:bg-white/10 transition-all cursor-pointer"
           >
@@ -608,7 +600,7 @@ export const GuardianGlobe: React.FC<GuardianGlobeProps> = ({
           </button>
 
           <button
-            onClick={() => handleZoom(0.4)}
+            onClick={() => handleZoom(0.35)}
             title="Alejar (Zoom Out)"
             className="p-2 rounded-xl text-zinc-400 hover:text-white bg-white/5 hover:bg-white/10 transition-all cursor-pointer"
           >
