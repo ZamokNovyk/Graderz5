@@ -27,6 +27,7 @@ import {
   clearRecentSearches,
   RecentSearchItem 
 } from '../lib/search';
+import { recordPersonajeSearch } from '../lib/personajesService';
 
 interface SearchModalProps {
   isOpen: boolean;
@@ -149,6 +150,11 @@ export const SearchModal: React.FC<SearchModalProps> = ({
         type: type || 'personaje'
       });
       setRecentSearches(getRecentSearches());
+    }
+
+    if (slug) {
+      // Increment search_count in Supabase database in the background
+      recordPersonajeSearch(slug);
     }
 
     if (onSelectPersonaje) {

@@ -71,6 +71,8 @@ export interface Personaje {
   count_fan?: number;
   count_simp?: number;
   count_hater?: number;
+  views_count?: number;
+  search_count?: number;
   rating: number;
   votes_count: number;
   stars_1?: number;

@@ -955,6 +955,8 @@ export async function getPersonajesList(): Promise<Personaje[]> {
           count_fan: item.count_fan !== undefined && item.count_fan !== null ? Number(item.count_fan) : undefined,
           count_simp: item.count_simp !== undefined && item.count_simp !== null ? Number(item.count_simp) : undefined,
           count_hater: item.count_hater !== undefined && item.count_hater !== null ? Number(item.count_hater) : undefined,
+          views_count: item.views_count !== undefined && item.views_count !== null ? Number(item.views_count) : 0,
+          search_count: item.search_count !== undefined && item.search_count !== null ? Number(item.search_count) : 0,
           rating: item.rating !== undefined && item.rating !== null ? Number(item.rating) : 0,
           votes_count: item.votes_count !== undefined && item.votes_count !== null ? Number(item.votes_count) : 0,
           stars_1: Number(item.stars_1) || 0,
@@ -1070,6 +1072,8 @@ export async function getPersonajeBySlug(slug: string): Promise<Personaje | null
           count_fan: data.count_fan !== undefined && data.count_fan !== null ? Number(data.count_fan) : 0,
           count_simp: data.count_simp !== undefined && data.count_simp !== null ? Number(data.count_simp) : 0,
           count_hater: data.count_hater !== undefined && data.count_hater !== null ? Number(data.count_hater) : 0,
+          views_count: data.views_count !== undefined && data.views_count !== null ? Number(data.views_count) : 0,
+          search_count: data.search_count !== undefined && data.search_count !== null ? Number(data.search_count) : 0,
           rating: data.rating !== undefined && data.rating !== null ? Number(data.rating) : 0,
           votes_count: data.votes_count !== undefined && data.votes_count !== null ? Number(data.votes_count) : 0,
           stars_1: Number(data.stars_1) || 0,
@@ -1483,3 +1487,64 @@ export async function votePersonaje(slug: string, newScore: number): Promise<Per
 
   return personaje;
 }
+
+/**
+ * Incrementa de forma segura el contador de visitas (views_count) de un personaje en Supabase
+ * Se ejecuta en segundo plano sin interrumpir la carga del usuario ni mostrarse en la UI.
+ */
+export async function recordPersonajeView(slug: string): Promise<void> {
+  if (!slug || !supabase) return;
+  const cleanSlug = slug.toLowerCase().trim();
+  try {
+    const { error: rpcError } = await supabase.rpc('increment_personaje_views', { p_slug: cleanSlug });
+    if (rpcError) {
+      // Fallback directo en tabla si no existe la función RPC
+      const { data: current } = await supabase
+        .from('personajes')
+        .select('views_count')
+        .eq('slug', cleanSlug)
+        .single();
+
+      if (current) {
+        const nextViews = (Number(current.views_count) || 0) + 1;
+        await supabase
+          .from('personajes')
+          .update({ views_count: nextViews })
+          .eq('slug', cleanSlug);
+      }
+    }
+  } catch (err) {
+    console.debug('[recordPersonajeView] Telemetría interna:', err);
+  }
+}
+
+/**
+ * Incrementa de forma segura el contador de búsquedas (search_count) de un personaje en Supabase
+ * Se dispara al hacer clic en la tarjeta/resultado del buscador.
+ */
+export async function recordPersonajeSearch(slug: string): Promise<void> {
+  if (!slug || !supabase) return;
+  const cleanSlug = slug.toLowerCase().trim();
+  try {
+    const { error: rpcError } = await supabase.rpc('increment_personaje_searches', { p_slug: cleanSlug });
+    if (rpcError) {
+      // Fallback directo en tabla si no existe la función RPC
+      const { data: current } = await supabase
+        .from('personajes')
+        .select('search_count')
+        .eq('slug', cleanSlug)
+        .single();
+
+      if (current) {
+        const nextSearches = (Number(current.search_count) || 0) + 1;
+        await supabase
+          .from('personajes')
+          .update({ search_count: nextSearches })
+          .eq('slug', cleanSlug);
+      }
+    }
+  } catch (err) {
+    console.debug('[recordPersonajeSearch] Telemetría interna:', err);
+  }
+}
+

@@ -34,7 +34,7 @@ import {
 } from 'lucide-react';
 import { ActitudType, Personaje, PersonajeResena, StarpostReactionType } from '../types';
 import { User } from '../lib/firebase';
-import { getPersonajeBySlug, votePersonaje, getPersonajesList } from '../lib/personajesService';
+import { getPersonajeBySlug, votePersonaje, getPersonajesList, recordPersonajeView } from '../lib/personajesService';
 import { 
   getOrCreateGuestUid, 
   getUserPreferences, 
@@ -132,6 +132,11 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
         loadedPersonaje = data;
         setPersonaje(data);
         setResenasList(reviews);
+
+        if (data) {
+          // Increment views_count in database (internal background telemetry)
+          recordPersonajeView(slug);
+        }
 
         const userReview = reviews.find(r => r.user_uid === effectiveUid);
         if (userReview) {

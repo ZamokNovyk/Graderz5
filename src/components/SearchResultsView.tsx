@@ -19,7 +19,7 @@ import {
   HeartHandshake
 } from 'lucide-react';
 import { Personaje } from '../types';
-import { getPersonajesList } from '../lib/personajesService';
+import { getPersonajesList, recordPersonajeSearch } from '../lib/personajesService';
 import { detectType } from '../lib/search';
 import { CountrySelect } from './CountrySelect';
 import { FlagImage } from './FlagImage';
@@ -635,7 +635,10 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
           {filteredResults.map((p) => (
             <div
               key={p.id}
-              onClick={() => onSelectPersonaje(p.slug)}
+              onClick={() => {
+                recordPersonajeSearch(p.slug);
+                onSelectPersonaje(p.slug);
+              }}
               className="bg-[#111116] hover:bg-[#15151c] border border-white/5 hover:border-white/10 rounded-2xl p-5 flex items-start gap-4 cursor-pointer transition-all duration-300 hover:translate-y-[-4px] shadow-lg relative group"
             >
               {/* Category Badge */}
@@ -699,7 +702,10 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
           {filteredResults.map((p, idx) => (
             <div
               key={p.id}
-              onClick={() => onSelectPersonaje(p.slug)}
+              onClick={() => {
+                recordPersonajeSearch(p.slug);
+                onSelectPersonaje(p.slug);
+              }}
               className="bg-[#111116] hover:bg-[#15151c] border border-white/5 hover:border-white/10 rounded-xl p-4 flex items-center justify-between gap-4 cursor-pointer transition-all duration-200 group"
             >
               <div className="flex items-center gap-4">

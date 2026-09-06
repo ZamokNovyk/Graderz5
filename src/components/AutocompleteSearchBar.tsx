@@ -27,6 +27,7 @@ import {
   clearRecentSearches,
   RecentSearchItem 
 } from '../lib/search';
+import { recordPersonajeSearch } from '../lib/personajesService';
 
 interface AutocompleteSearchBarProps {
   value?: string;
@@ -206,11 +207,16 @@ export default function AutocompleteSearchBar({
     });
     setRecentSearches(updatedRecents);
 
-    // 2. Close suggestions popover
+    // 2. Increment search_count in Supabase in the background
+    if (suggestion.slug) {
+      recordPersonajeSearch(suggestion.slug);
+    }
+
+    // 3. Close suggestions popover
     setIsOpen(false);
     setSelectedIndex(-1);
 
-    // 3. Dispatch navigation action
+    // 4. Dispatch navigation action
     if (onSelectPersonaje) {
       onSelectPersonaje(suggestion.slug);
     } else if (onSelectSuggestion) {
@@ -225,6 +231,9 @@ export default function AutocompleteSearchBar({
   // Selecting an item from recent search history
   const handleSelectRecent = (item: RecentSearchItem) => {
     if (item.slug) {
+      // Increment search_count in background
+      recordPersonajeSearch(item.slug);
+
       // Direct navigation to person
       if (onSelectPersonaje) {
         onSelectPersonaje(item.slug);
