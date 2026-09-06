@@ -1227,10 +1227,6 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
               <div className="border-t border-white/5 pt-5 space-y-4">
                 {!voteSubmitted ? (
                   <form onSubmit={handleSubmitResena} className="space-y-4">
-                    <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest text-center">
-                      ¿Conoces a {personaje.nombre}? ¡Deja tu calificación y Starpost!
-                    </p>
-
                     <div className="flex items-center justify-center gap-2">
                       {[1, 2, 3, 4, 5].map((star) => {
                         const isFilled = (hoverRating !== null ? hoverRating >= star : (userRating !== null ? userRating >= star : false));
@@ -1253,10 +1249,7 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
                       })}
                     </div>
 
-                    <div className="space-y-1.5">
-                      <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider">
-                        Escribe tu Starpost (Opcional, máximo 500 caracteres)
-                      </label>
+                     <div className="space-y-1.5">
                       <textarea
                         value={userReviewText}
                         onChange={(e) => setUserReviewText(e.target.value.substring(0, 500))}
