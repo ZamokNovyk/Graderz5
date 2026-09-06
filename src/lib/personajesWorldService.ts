@@ -1,9 +1,38 @@
 import { supabase } from './supabase';
-import { ActitudType, PersonajeWorldRecord } from '../types';
+import { ActitudType, PersonajeWorldRecord, CountryDemographics } from '../types';
 import { getCountryCoordinates } from '../data/countryCoordinates';
 import { invalidateAudienceCache } from './audienceService';
 
 const WORLD_STORAGE_KEY = 'graderz5_personajes_world';
+
+/**
+ * Normaliza el género a 'm' (masculino/hombre), 'f' (femenino/mujer), u 'o' (otro/no especificado)
+ */
+export function normalizeGender(genderRaw?: string): 'm' | 'f' | 'o' {
+  if (!genderRaw) return 'o';
+  const g = genderRaw.toLowerCase().trim();
+  if (g === 'masculino' || g === 'hombre' || g === 'm' || g === 'male') return 'm';
+  if (g === 'femenino' || g === 'mujer' || g === 'f' || g === 'female') return 'f';
+  return 'o';
+}
+
+/**
+ * Extrae o convierte de forma segura estadísticas de país, soportando tanto
+ * objetos de demografía { total, m, f, o } como números primitivos heredados.
+ */
+export function parseCountryStats(raw: number | CountryDemographics | undefined): CountryDemographics {
+  if (!raw) {
+    return { total: 0, m: 0, f: 0, o: 0 };
+  }
+  if (typeof raw === 'number') {
+    return { total: raw, m: 0, f: 0, o: raw };
+  }
+  const m = Number(raw.m || 0);
+  const f = Number(raw.f || 0);
+  const o = Number(raw.o || 0);
+  const total = typeof raw.total === 'number' ? raw.total : (m + f + o);
+  return { total, m, f, o };
+}
 
 /**
  * Retorna la clave de registro para la tabla personajes_world
@@ -129,22 +158,25 @@ function normalizeCountryName(countryRaw: string): string {
  * cambia de actitud (ej. Fan -> Hater), o remueve su voto.
  * 
  * Regla:
- * - Si oldActitud existía: resta 1 al país correspondiente en el documento de oldActitud.
- * - Si newActitud existe: suma 1 al país correspondiente en el documento de newActitud.
+ * - Si oldActitud existía: resta 1 al país correspondiente y a su género en el documento de oldActitud.
+ * - Si newActitud existe: suma 1 al país correspondiente y a su género en el documento de newActitud.
  */
 export async function updatePersonajeWorldVotes({
   personajeSlug,
   userCountry,
+  userGender,
   oldActitud,
   newActitud
 }: {
   personajeSlug: string;
   userCountry?: string;
+  userGender?: string;
   oldActitud?: ActitudType | null;
   newActitud?: ActitudType | null;
 }): Promise<void> {
   const cleanSlug = personajeSlug.toLowerCase().trim();
   const country = normalizeCountryName(userCountry || '');
+  const gender = normalizeGender(userGender);
 
   // Si no hay país especificado, no hay país qué sumar/restar en el mapa
   if (!country) return;
@@ -159,13 +191,20 @@ export async function updatePersonajeWorldVotes({
   // 1. CASO RESTA: El usuario tenía una actitud anterior y la quitó o cambió (ej: de fan a hater)
   if (oldActitud && currentRecords[oldActitud]) {
     const docOld = { ...currentRecords[oldActitud], paises: { ...currentRecords[oldActitud].paises } };
-    const prevCount = docOld.paises[country] || 0;
-    if (prevCount > 1) {
-      docOld.paises[country] = prevCount - 1;
+    const stats = parseCountryStats(docOld.paises[country]);
+
+    stats.total = Math.max(0, stats.total - 1);
+    if (gender === 'm') stats.m = Math.max(0, stats.m - 1);
+    else if (gender === 'f') stats.f = Math.max(0, stats.f - 1);
+    else stats.o = Math.max(0, (stats.o || 0) - 1);
+
+    if (stats.total > 0) {
+      docOld.paises[country] = stats;
     } else {
       delete docOld.paises[country];
     }
-    docOld.total = Math.max(0, Object.values(docOld.paises).reduce((a, b) => a + b, 0));
+
+    docOld.total = Object.values(docOld.paises).reduce<number>((sum, c) => sum + parseCountryStats(c).total, 0);
     docOld.updated_at = new Date().toISOString();
 
     currentRecords[oldActitud] = docOld;
@@ -176,9 +215,15 @@ export async function updatePersonajeWorldVotes({
   // 2. CASO SUMA: El usuario seleccionó una nueva actitud
   if (newActitud && currentRecords[newActitud]) {
     const docNew = { ...currentRecords[newActitud], paises: { ...currentRecords[newActitud].paises } };
-    const prevCount = docNew.paises[country] || 0;
-    docNew.paises[country] = prevCount + 1;
-    docNew.total = Object.values(docNew.paises).reduce((a, b) => a + b, 0);
+    const stats = parseCountryStats(docNew.paises[country]);
+
+    stats.total += 1;
+    if (gender === 'm') stats.m += 1;
+    else if (gender === 'f') stats.f += 1;
+    else stats.o = stats.o + 1;
+
+    docNew.paises[country] = stats;
+    docNew.total = Object.values(docNew.paises).reduce<number>((sum, c) => sum + parseCountryStats(c).total, 0);
     docNew.updated_at = new Date().toISOString();
 
     currentRecords[newActitud] = docNew;
@@ -215,7 +260,8 @@ export async function updatePersonajeWorldVotes({
 
 /**
  * Sincroniza y pobla automáticamente los 4 documentos de personajes_world
- * a partir de los registros individuales de 'personajes_actitud'.
+ * a partir de los registros individuales de 'personajes_actitud', desglosando
+ * sexo (hombre / mujer / otro).
  */
 export async function syncPersonajeWorldFromActitudes(personajeSlug: string): Promise<Record<ActitudType, PersonajeWorldRecord> | null> {
   const cleanSlug = personajeSlug.toLowerCase().trim();
@@ -225,7 +271,7 @@ export async function syncPersonajeWorldFromActitudes(personajeSlug: string): Pr
   try {
     const { data: rows, error } = await supabase
       .from('personajes_actitud')
-      .select('actitud, user_nationality')
+      .select('actitud, user_nationality, user_gender')
       .eq('personaje_slug', cleanSlug);
 
     if (error || !Array.isArray(rows)) return null;
@@ -245,7 +291,18 @@ export async function syncPersonajeWorldFromActitudes(personajeSlug: string): Pr
       const country = normalizeCountryName(r.user_nationality || '');
       if (!country) continue;
 
-      docs[act].paises[country] = (docs[act].paises[country] || 0) + 1;
+      const gender = normalizeGender(r.user_gender);
+
+      if (!docs[act].paises[country]) {
+        docs[act].paises[country] = { total: 0, m: 0, f: 0, o: 0 };
+      }
+
+      const countryObj = docs[act].paises[country] as CountryDemographics;
+      countryObj.total += 1;
+      if (gender === 'm') countryObj.m += 1;
+      else if (gender === 'f') countryObj.f += 1;
+      else countryObj.o = (countryObj.o || 0) + 1;
+
       docs[act].total++;
     }
 

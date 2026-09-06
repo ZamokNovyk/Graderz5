@@ -71,17 +71,29 @@ export const GuardianGlobe: React.FC<GuardianGlobeProps> = ({
 
   // Interaction State
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'fan' | 'simp' | 'hater' | 'conozco'>('all');
+  const [selectedGender, setSelectedGender] = useState<'all' | 'm' | 'f'>('all');
   const [autoRotate, setAutoRotate] = useState(true);
   const [textureMode, setTextureMode] = useState<MapTextureMode>('satellite');
   const [showBorders, setShowBorders] = useState(true);
 
-  // Filtered lights
+  // Filtered lights by Attitude AND Gender
   const activeLights = useMemo(() => {
-    if (selectedFilter === 'all') return lights;
-    return lights.filter(l => l.type === selectedFilter || l.type === 'home');
-  }, [lights, selectedFilter]);
+    return lights.filter(l => {
+      if (l.type === 'home') return true;
 
-  // Counts for tabs
+      if (selectedFilter !== 'all' && l.type !== selectedFilter) {
+        return false;
+      }
+
+      if (selectedGender !== 'all') {
+        if (l.gender !== selectedGender) return false;
+      }
+
+      return true;
+    });
+  }, [lights, selectedFilter, selectedGender]);
+
+  // Counts for attitude tabs
   const filterCounts = useMemo(() => {
     const counts = { all: totalVotes, fan: 0, simp: 0, hater: 0, conozco: 0 };
     stats.forEach(s => {
@@ -93,32 +105,113 @@ export const GuardianGlobe: React.FC<GuardianGlobeProps> = ({
     return counts;
   }, [stats, totalVotes]);
 
+  // Counts for gender filter buttons - SCOPED DIRECTLY TO SELECTED ATTITUDE
+  const genderCounts = useMemo(() => {
+    if (selectedFilter === 'all') {
+      let m = 0;
+      let f = 0;
+      stats.forEach(s => {
+        m += s.maleCount;
+        f += s.femaleCount;
+      });
+      return { all: totalVotes, m, f };
+    }
+
+    // When an attitude is selected (e.g. Fans), calculate ONLY for that attitude
+    let m = 0;
+    let f = 0;
+    let all = 0;
+
+    stats.forEach(s => {
+      if (s.byActitud && s.byActitud[selectedFilter]) {
+        const actData = s.byActitud[selectedFilter];
+        m += actData.m;
+        f += actData.f;
+        all += actData.total;
+      } else {
+        let baseCount = 0;
+        if (selectedFilter === 'fan') baseCount = s.fanCount;
+        else if (selectedFilter === 'simp') baseCount = s.simpCount;
+        else if (selectedFilter === 'hater') baseCount = s.haterCount;
+        else if (selectedFilter === 'conozco') baseCount = s.conozcoCount;
+
+        all += baseCount;
+        const ratioM = s.totalInteractions > 0 ? s.maleCount / s.totalInteractions : 0;
+        const ratioF = s.totalInteractions > 0 ? s.femaleCount / s.totalInteractions : 0;
+        m += Math.round(baseCount * ratioM);
+        f += Math.round(baseCount * ratioF);
+      }
+    });
+
+    return { all, m, f };
+  }, [stats, totalVotes, selectedFilter]);
+
+  // Helper to get filtered count for a country
+  const getCountryCount = (st: CountryAudienceStats): number => {
+    if (selectedFilter === 'all') {
+      if (selectedGender === 'm') return st.maleCount;
+      if (selectedGender === 'f') return st.femaleCount;
+      return st.totalInteractions;
+    }
+
+    const actData = st.byActitud?.[selectedFilter];
+    if (actData) {
+      if (selectedGender === 'm') return actData.m;
+      if (selectedGender === 'f') return actData.f;
+      return actData.total;
+    }
+
+    let baseCount = 0;
+    if (selectedFilter === 'fan') baseCount = st.fanCount;
+    else if (selectedFilter === 'simp') baseCount = st.simpCount;
+    else if (selectedFilter === 'hater') baseCount = st.haterCount;
+    else if (selectedFilter === 'conozco') baseCount = st.conozcoCount;
+
+    if (selectedGender === 'all') return baseCount;
+    const genderRatio = st.totalInteractions > 0
+      ? (selectedGender === 'm' ? st.maleCount / st.totalInteractions : st.femaleCount / st.totalInteractions)
+      : 0;
+    return Math.round(baseCount * genderRatio);
+  };
+
   // Concentric pulsing radar rings for countries with votes
   const ringsData = useMemo(() => {
     return stats
-      .filter(s => s.totalInteractions > 0 || s.isHomeCountry)
-      .map(st => ({
-        lat: st.lat,
-        lng: st.lng,
-        maxR: Math.min(st.totalInteractions * 2.2 + 5, 18),
-        propagationSpeed: 1.4,
-        repeatPeriod: 1200,
-        color: () => st.isHomeCountry ? 'rgba(16, 185, 129, 0.85)' : 'rgba(249, 115, 22, 0.85)'
-      }));
-  }, [stats]);
+      .filter(s => getCountryCount(s) > 0 || s.isHomeCountry)
+      .map(st => {
+        const count = getCountryCount(st);
+        return {
+          lat: st.lat,
+          lng: st.lng,
+          maxR: Math.min(count * 2.2 + 5, 18),
+          propagationSpeed: 1.4,
+          repeatPeriod: 1200,
+          color: () => st.isHomeCountry
+            ? 'rgba(16, 185, 129, 0.85)'
+            : (selectedGender === 'm' ? 'rgba(56, 189, 248, 0.85)' : selectedGender === 'f' ? 'rgba(244, 114, 182, 0.85)' : 'rgba(249, 115, 22, 0.85)')
+        };
+      });
+  }, [stats, selectedFilter, selectedGender]);
 
   // Labels layer for countries with votes
   const labelsData = useMemo(() => {
     return stats
-      .filter(s => s.totalInteractions > 0 || s.isHomeCountry)
-      .map(st => ({
-        lat: st.lat,
-        lng: st.lng,
-        text: `${st.country} (${st.totalInteractions})`,
-        size: 0.9,
-        color: st.isHomeCountry ? '#10b981' : '#facc15'
-      }));
-  }, [stats]);
+      .filter(s => getCountryCount(s) > 0 || s.isHomeCountry)
+      .map(st => {
+        const count = getCountryCount(st);
+        let suffix = `(${count})`;
+        if (selectedGender === 'm') suffix = `(♂ ${count})`;
+        else if (selectedGender === 'f') suffix = `(♀ ${count})`;
+
+        return {
+          lat: st.lat,
+          lng: st.lng,
+          text: `${st.country} ${suffix}`,
+          size: 0.9,
+          color: st.isHomeCountry ? '#10b981' : (selectedGender === 'm' ? '#38bdf8' : selectedGender === 'f' ? '#f472b6' : '#facc15')
+        };
+      });
+  }, [stats, selectedFilter, selectedGender]);
 
   // Initialize Globe.gl
   useEffect(() => {
@@ -327,67 +420,111 @@ export const GuardianGlobe: React.FC<GuardianGlobeProps> = ({
           )}
         </div>
 
-        {/* Attitude Filter Tabs */}
-        <div className="mt-5 flex flex-wrap gap-1.5 border-t border-white/5 pt-4">
-          <button
-            onClick={() => setSelectedFilter('all')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-              selectedFilter === 'all'
-                ? 'bg-amber-500 text-black shadow-[0_0_15px_rgba(245,158,11,0.3)]'
-                : 'bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10'
-            }`}
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Todos ({filterCounts.all})</span>
-          </button>
+        {/* Attitude & Gender Filter Controls */}
+        <div className="mt-5 space-y-3 border-t border-white/5 pt-4">
+          
+          {/* Attitude Filter Tabs */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 mr-1 hidden sm:inline">Actitud:</span>
+            <button
+              onClick={() => setSelectedFilter('all')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                selectedFilter === 'all'
+                  ? 'bg-amber-500 text-black shadow-[0_0_15px_rgba(245,158,11,0.3)]'
+                  : 'bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Todos ({filterCounts.all})</span>
+            </button>
 
-          <button
-            onClick={() => setSelectedFilter('fan')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-              selectedFilter === 'fan'
-                ? 'bg-[#facc15] text-black shadow-[0_0_15px_rgba(250,204,21,0.35)]'
-                : 'bg-white/5 text-zinc-400 hover:text-amber-300 hover:bg-white/10'
-            }`}
-          >
-            <Heart className="w-3.5 h-3.5 fill-current" />
-            <span>Fans ({filterCounts.fan})</span>
-          </button>
+            <button
+              onClick={() => setSelectedFilter('fan')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                selectedFilter === 'fan'
+                  ? 'bg-[#facc15] text-black shadow-[0_0_15px_rgba(250,204,21,0.35)]'
+                  : 'bg-white/5 text-zinc-400 hover:text-amber-300 hover:bg-white/10'
+              }`}
+            >
+              <Heart className="w-3.5 h-3.5 fill-current" />
+              <span>Fans ({filterCounts.fan})</span>
+            </button>
 
-          <button
-            onClick={() => setSelectedFilter('simp')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-              selectedFilter === 'simp'
-                ? 'bg-orange-500 text-white shadow-[0_0_15px_rgba(249,115,22,0.35)]'
-                : 'bg-white/5 text-zinc-400 hover:text-orange-400 hover:bg-white/10'
-            }`}
-          >
-            <Flame className="w-3.5 h-3.5 fill-current" />
-            <span>SIMPs ({filterCounts.simp})</span>
-          </button>
+            <button
+              onClick={() => setSelectedFilter('simp')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                selectedFilter === 'simp'
+                  ? 'bg-orange-500 text-white shadow-[0_0_15px_rgba(249,115,22,0.35)]'
+                  : 'bg-white/5 text-zinc-400 hover:text-orange-400 hover:bg-white/10'
+              }`}
+            >
+              <Flame className="w-3.5 h-3.5 fill-current" />
+              <span>SIMPs ({filterCounts.simp})</span>
+            </button>
 
-          <button
-            onClick={() => setSelectedFilter('hater')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-              selectedFilter === 'hater'
-                ? 'bg-purple-600 text-white shadow-[0_0_15px_rgba(168,85,247,0.35)]'
-                : 'bg-white/5 text-zinc-400 hover:text-purple-400 hover:bg-white/10'
-            }`}
-          >
-            <Skull className="w-3.5 h-3.5 text-purple-400" />
-            <span>Haters ({filterCounts.hater})</span>
-          </button>
+            <button
+              onClick={() => setSelectedFilter('hater')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                selectedFilter === 'hater'
+                  ? 'bg-purple-600 text-white shadow-[0_0_15px_rgba(168,85,247,0.35)]'
+                  : 'bg-white/5 text-zinc-400 hover:text-purple-400 hover:bg-white/10'
+              }`}
+            >
+              <Skull className="w-3.5 h-3.5 text-purple-400" />
+              <span>Haters ({filterCounts.hater})</span>
+            </button>
 
-          <button
-            onClick={() => setSelectedFilter('conozco')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-              selectedFilter === 'conozco'
-                ? 'bg-sky-500 text-white shadow-[0_0_15px_rgba(56,189,248,0.35)]'
-                : 'bg-white/5 text-zinc-400 hover:text-sky-400 hover:bg-white/10'
-            }`}
-          >
-            <Users className="w-3.5 h-3.5 text-sky-400" />
-            <span>Conozco ({filterCounts.conozco})</span>
-          </button>
+            <button
+              onClick={() => setSelectedFilter('conozco')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                selectedFilter === 'conozco'
+                  ? 'bg-sky-500 text-white shadow-[0_0_15px_rgba(56,189,248,0.35)]'
+                  : 'bg-white/5 text-zinc-400 hover:text-sky-400 hover:bg-white/10'
+              }`}
+            >
+              <Users className="w-3.5 h-3.5 text-sky-400" />
+              <span>Conozco ({filterCounts.conozco})</span>
+            </button>
+          </div>
+
+          {/* Gender Demographics Filter Tabs */}
+          <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-white/5">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 mr-1 hidden sm:inline">Filtrar por Sexo:</span>
+            
+            <button
+              onClick={() => setSelectedGender('all')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                selectedGender === 'all'
+                  ? 'bg-zinc-200 text-zinc-950 font-bold shadow-md'
+                  : 'bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10'
+              }`}
+            >
+              <span>🌐 Ambos sexos ({genderCounts.all})</span>
+            </button>
+
+            <button
+              onClick={() => setSelectedGender('m')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                selectedGender === 'm'
+                  ? 'bg-sky-500 text-white shadow-[0_0_15px_rgba(56,189,248,0.4)]'
+                  : 'bg-white/5 text-zinc-400 hover:text-sky-300 hover:bg-white/10'
+              }`}
+            >
+              <span>👨 Hombres ({genderCounts.m})</span>
+            </button>
+
+            <button
+              onClick={() => setSelectedGender('f')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                selectedGender === 'f'
+                  ? 'bg-pink-500 text-white shadow-[0_0_15px_rgba(244,114,182,0.4)]'
+                  : 'bg-white/5 text-zinc-400 hover:text-pink-300 hover:bg-white/10'
+              }`}
+            >
+              <span>👩 Mujeres ({genderCounts.f})</span>
+            </button>
+          </div>
+
         </div>
       </div>
 
@@ -491,102 +628,169 @@ export const GuardianGlobe: React.FC<GuardianGlobeProps> = ({
             </h4>
           </div>
           <span className="text-xs text-zinc-500">
-            {stats.filter(s => s.totalInteractions > 0).length} países activos
+            {stats.filter(s => getCountryCount(s) > 0).length} {stats.filter(s => getCountryCount(s) > 0).length === 1 ? 'país activo' : 'países activos'}
           </span>
         </div>
 
-        {stats.filter(s => s.totalInteractions > 0).length === 0 ? (
+        {stats.filter(s => getCountryCount(s) > 0).length === 0 ? (
           <div className="py-10 text-center space-y-3">
             <div className="w-12 h-12 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 mx-auto flex items-center justify-center">
               <Sparkles className="w-6 h-6" />
             </div>
-            <p className="text-sm font-bold text-white">¡Sé la primera luz en el mapa!</p>
+            <p className="text-sm font-bold text-white">
+              {selectedFilter === 'all' && selectedGender === 'all'
+                ? '¡Sé la primera luz en el mapa!'
+                : 'Sin registros para este filtro'}
+            </p>
             <p className="text-xs text-zinc-400 max-w-md mx-auto">
-              Aún no hay votos con país registrado para {personajeName}. Marca tu actitud (Fan, Simp, Hater o Te Conozco) en la parte superior para encender tu nación en el globo terráqueo.
+              {selectedFilter === 'all' && selectedGender === 'all'
+                ? `Aún no hay votos con país registrado para ${personajeName}. Marca tu actitud (Fan, Simp, Hater o Te Conozco) en la parte superior para encender tu nación en el globo terráqueo.`
+                : `Aún no hay votos registrados de ${selectedFilter === 'fan' ? 'Fans' : selectedFilter === 'simp' ? 'SIMPs' : selectedFilter === 'hater' ? 'Haters' : selectedFilter === 'conozco' ? 'Conozco' : 'audiencia'}${selectedGender === 'm' ? ' (Hombres)' : selectedGender === 'f' ? ' (Mujeres)' : ''} para ${personajeName}.`}
             </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
             {stats
-              .filter(s => s.totalInteractions > 0)
-              .map((st, index) => (
-                <div
-                  key={st.country}
-                  className="bg-[#161620] hover:bg-[#1c1c28] border border-white/5 hover:border-white/10 rounded-xl p-3.5 transition-all space-y-2.5"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[11px] font-black text-zinc-500 w-4">#{index + 1}</span>
-                      <FlagImage countryName={st.country} size="sm" />
-                      <span className="text-xs font-bold text-white">{st.country}</span>
-                      {st.isHomeCountry && (
-                        <span className="text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-1.5 py-0.2 rounded font-semibold">
-                          Origen
+              .filter(s => getCountryCount(s) > 0)
+              .map((st, index) => {
+                const count = getCountryCount(st);
+
+                // Scope demographic counts strictly to the active attitude filter
+                let countryMale = st.maleCount;
+                let countryFemale = st.femaleCount;
+                let countryBaseTotal = st.totalInteractions;
+
+                if (selectedFilter !== 'all') {
+                  const actData = st.byActitud?.[selectedFilter];
+                  if (actData) {
+                    countryMale = actData.m;
+                    countryFemale = actData.f;
+                    countryBaseTotal = actData.total;
+                  } else {
+                    countryBaseTotal = count;
+                    const ratioM = st.totalInteractions > 0 ? st.maleCount / st.totalInteractions : 0;
+                    const ratioF = st.totalInteractions > 0 ? st.femaleCount / st.totalInteractions : 0;
+                    countryMale = Math.round(count * ratioM);
+                    countryFemale = Math.round(count * ratioF);
+                  }
+                }
+
+                const pctMale = countryBaseTotal > 0 ? Math.round((countryMale / countryBaseTotal) * 100) : 0;
+                const pctFemale = countryBaseTotal > 0 ? Math.round((countryFemale / countryBaseTotal) * 100) : 0;
+
+                return (
+                  <div
+                    key={st.country}
+                    className="bg-[#161620] hover:bg-[#1c1c28] border border-white/5 hover:border-white/10 rounded-xl p-3.5 transition-all space-y-2.5"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] font-black text-zinc-500 w-4">#{index + 1}</span>
+                        <FlagImage countryName={st.country} size="sm" />
+                        <span className="text-xs font-bold text-white">{st.country}</span>
+                        {st.isHomeCountry && (
+                          <span className="text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-1.5 py-0.2 rounded font-semibold">
+                            Origen
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-xs font-black text-amber-400">
+                        {selectedGender === 'm'
+                          ? `${countryMale} ${countryMale === 1 ? 'hombre' : 'hombres'}`
+                          : selectedGender === 'f'
+                          ? `${countryFemale} ${countryFemale === 1 ? 'mujer' : 'mujeres'}`
+                          : `${count} ${count === 1 ? 'voto' : 'votos'}`}
+                      </span>
+                    </div>
+
+                    {/* Progress bar of percentage by attitude */}
+                    <div className="w-full h-1.5 bg-black/40 rounded-full overflow-hidden flex">
+                      {st.fanCount > 0 && (
+                        <div 
+                          style={{ width: `${(st.fanCount / st.totalInteractions) * 100}%` }} 
+                          className="bg-[#facc15] h-full" 
+                          title={`Fans: ${st.fanCount}`}
+                        />
+                      )}
+                      {st.simpCount > 0 && (
+                        <div 
+                          style={{ width: `${(st.simpCount / st.totalInteractions) * 100}%` }} 
+                          className="bg-orange-500 h-full" 
+                          title={`SIMPs: ${st.simpCount}`}
+                        />
+                      )}
+                      {st.haterCount > 0 && (
+                        <div 
+                          style={{ width: `${(st.haterCount / st.totalInteractions) * 100}%` }} 
+                          className="bg-purple-500 h-full" 
+                          title={`Haters: ${st.haterCount}`}
+                        />
+                      )}
+                      {st.conozcoCount > 0 && (
+                        <div 
+                          style={{ width: `${(st.conozcoCount / st.totalInteractions) * 100}%` }} 
+                          className="bg-sky-400 h-full" 
+                          title={`Conozco: ${st.conozcoCount}`}
+                        />
+                      )}
+                    </div>
+
+                    {/* Mini badges breakdown by attitude */}
+                    <div className="flex items-center gap-3 text-[10px] text-zinc-400 pt-0.5">
+                      {st.fanCount > 0 && (
+                        <span className="flex items-center gap-1 text-[#facc15]">
+                          <Heart className="w-2.5 h-2.5 fill-current" /> {st.fanCount}
+                        </span>
+                      )}
+                      {st.simpCount > 0 && (
+                        <span className="flex items-center gap-1 text-orange-400">
+                          <Flame className="w-2.5 h-2.5 fill-current" /> {st.simpCount}
+                        </span>
+                      )}
+                      {st.haterCount > 0 && (
+                        <span className="flex items-center gap-1 text-purple-400">
+                          <Skull className="w-2.5 h-2.5" /> {st.haterCount}
+                        </span>
+                      )}
+                      {st.conozcoCount > 0 && (
+                        <span className="flex items-center gap-1 text-sky-400">
+                          <Users className="w-2.5 h-2.5" /> {st.conozcoCount}
                         </span>
                       )}
                     </div>
-                    <span className="text-xs font-black text-amber-400">
-                      {st.totalInteractions} {st.totalInteractions === 1 ? 'voto' : 'votos'}
-                    </span>
-                  </div>
 
-                  {/* Progress bar of percentage */}
-                  <div className="w-full h-1.5 bg-black/40 rounded-full overflow-hidden flex">
-                    {st.fanCount > 0 && (
-                      <div 
-                        style={{ width: `${(st.fanCount / st.totalInteractions) * 100}%` }} 
-                        className="bg-[#facc15] h-full" 
-                        title={`Fans: ${st.fanCount}`}
-                      />
-                    )}
-                    {st.simpCount > 0 && (
-                      <div 
-                        style={{ width: `${(st.simpCount / st.totalInteractions) * 100}%` }} 
-                        className="bg-orange-500 h-full" 
-                        title={`SIMPs: ${st.simpCount}`}
-                      />
-                    )}
-                    {st.haterCount > 0 && (
-                      <div 
-                        style={{ width: `${(st.haterCount / st.totalInteractions) * 100}%` }} 
-                        className="bg-purple-500 h-full" 
-                        title={`Haters: ${st.haterCount}`}
-                      />
-                    )}
-                    {st.conozcoCount > 0 && (
-                      <div 
-                        style={{ width: `${(st.conozcoCount / st.totalInteractions) * 100}%` }} 
-                        className="bg-sky-400 h-full" 
-                        title={`Conozco: ${st.conozcoCount}`}
-                      />
-                    )}
-                  </div>
-
-                  {/* Mini badges breakdown */}
-                  <div className="flex items-center gap-3 text-[10px] text-zinc-400 pt-0.5">
-                    {st.fanCount > 0 && (
-                      <span className="flex items-center gap-1 text-[#facc15]">
-                        <Heart className="w-2.5 h-2.5 fill-current" /> {st.fanCount}
-                      </span>
-                    )}
-                    {st.simpCount > 0 && (
-                      <span className="flex items-center gap-1 text-orange-400">
-                        <Flame className="w-2.5 h-2.5 fill-current" /> {st.simpCount}
-                      </span>
-                    )}
-                    {st.haterCount > 0 && (
-                      <span className="flex items-center gap-1 text-purple-400">
-                        <Skull className="w-2.5 h-2.5" /> {st.haterCount}
-                      </span>
-                    )}
-                    {st.conozcoCount > 0 && (
-                      <span className="flex items-center gap-1 text-sky-400">
-                        <Users className="w-2.5 h-2.5" /> {st.conozcoCount}
-                      </span>
+                    {/* Demographic breakdown by sex (Hombre / Mujer) for current attitude */}
+                    {(countryMale > 0 || countryFemale > 0) && (
+                      <div className="pt-2 border-t border-white/5 space-y-1">
+                        <div className="flex items-center justify-between text-[10px]">
+                          <span className="text-sky-400 font-medium flex items-center gap-1">
+                            ♂ {countryMale} {countryMale === 1 ? 'hombre' : 'hombres'} ({pctMale}%)
+                          </span>
+                          <span className="text-pink-400 font-medium flex items-center gap-1">
+                            ♀ {countryFemale} {countryFemale === 1 ? 'mujer' : 'mujeres'} ({pctFemale}%)
+                          </span>
+                        </div>
+                        <div className="w-full h-1 bg-black/40 rounded-full overflow-hidden flex">
+                          {countryMale > 0 && (
+                            <div
+                              style={{ width: `${pctMale}%` }}
+                              className="bg-sky-500 h-full"
+                              title={`Hombres: ${countryMale} (${pctMale}%)`}
+                            />
+                          )}
+                          {countryFemale > 0 && (
+                            <div
+                              style={{ width: `${pctFemale}%` }}
+                              className="bg-pink-500 h-full"
+                              title={`Mujeres: ${countryFemale} (${pctFemale}%)`}
+                            />
+                          )}
+                        </div>
+                      </div>
                     )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
           </div>
         )}
       </div>

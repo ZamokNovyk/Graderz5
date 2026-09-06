@@ -295,11 +295,12 @@ export async function togglePersonajeActitud(params: {
     }
   }
 
-  // Sincronizar en la tabla 'personajes_world' (documentos de Fan, SIMP, Hater, Conozco agrupados por país)
+  // Sincronizar en la tabla 'personajes_world' (documentos de Fan, SIMP, Hater, Conozco agrupados por país y género)
   try {
     await updatePersonajeWorldVotes({
       personajeSlug: cleanSlug,
       userCountry: userInfo.nationality,
+      userGender: userInfo.gender,
       oldActitud: currentActitud,
       newActitud: newActiveActitud
     });

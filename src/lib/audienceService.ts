@@ -1,7 +1,7 @@
 import { supabase } from './supabase';
-import { ActitudType, PersonajeActitud } from '../types';
+import { ActitudType, PersonajeActitud, CountryDemographics } from '../types';
 import { getCountryCoordinates, latLngToVector3 } from '../data/countryCoordinates';
-import { getPersonajeWorldRecords, syncPersonajeWorldFromActitudes } from './personajesWorldService';
+import { getPersonajeWorldRecords, syncPersonajeWorldFromActitudes, parseCountryStats, normalizeGender } from './personajesWorldService';
 
 export interface CountryAudienceStats {
   country: string;
@@ -13,10 +13,19 @@ export interface CountryAudienceStats {
   simpCount: number;
   haterCount: number;
   conozcoCount: number;
+  maleCount: number;
+  femaleCount: number;
+  otherCount: number;
   reviewsCount: number;
   avgRating?: number;
   percentageOfTotal: number;
   isHomeCountry?: boolean;
+  byActitud?: {
+    fan: CountryDemographics;
+    simp: CountryDemographics;
+    hater: CountryDemographics;
+    conozco: CountryDemographics;
+  };
 }
 
 export interface GlobeLightPoint {
@@ -25,6 +34,7 @@ export interface GlobeLightPoint {
   lat: number;
   lng: number;
   type: 'fan' | 'simp' | 'hater' | 'conozco' | 'home';
+  gender?: 'm' | 'f' | 'o';
   color: string;
   intensity: number;
   size: number;
@@ -107,6 +117,15 @@ export async function getPersonajeAudience(
     simp: number;
     hater: number;
     conozco: number;
+    male: number;
+    female: number;
+    other: number;
+    byActitud: {
+      fan: { total: number; m: number; f: number; o: number };
+      simp: { total: number; m: number; f: number; o: number };
+      hater: { total: number; m: number; f: number; o: number };
+      conozco: { total: number; m: number; f: number; o: number };
+    };
   }> = {};
 
   let totalValidVotes = 0;
@@ -129,21 +148,43 @@ export async function getPersonajeAudience(
         fan: 0,
         simp: 0,
         hater: 0,
-        conozco: 0
+        conozco: 0,
+        male: 0,
+        female: 0,
+        other: 0,
+        byActitud: {
+          fan: { total: 0, m: 0, f: 0, o: 0 },
+          simp: { total: 0, m: 0, f: 0, o: 0 },
+          hater: { total: 0, m: 0, f: 0, o: 0 },
+          conozco: { total: 0, m: 0, f: 0, o: 0 }
+        }
       };
     }
 
-    const fanCount = worldDocs.fan.paises[rawCountry] || 0;
-    const simpCount = worldDocs.simp.paises[rawCountry] || 0;
-    const haterCount = worldDocs.hater.paises[rawCountry] || 0;
-    const conozcoCount = worldDocs.conozco.paises[rawCountry] || 0;
+    const fanStats = parseCountryStats(worldDocs.fan.paises[rawCountry]);
+    const simpStats = parseCountryStats(worldDocs.simp.paises[rawCountry]);
+    const haterStats = parseCountryStats(worldDocs.hater.paises[rawCountry]);
+    const conozcoStats = parseCountryStats(worldDocs.conozco.paises[rawCountry]);
 
-    countryMap[canonicalName].fan += fanCount;
-    countryMap[canonicalName].simp += simpCount;
-    countryMap[canonicalName].hater += haterCount;
-    countryMap[canonicalName].conozco += conozcoCount;
+    countryMap[canonicalName].byActitud.fan = fanStats;
+    countryMap[canonicalName].byActitud.simp = simpStats;
+    countryMap[canonicalName].byActitud.hater = haterStats;
+    countryMap[canonicalName].byActitud.conozco = conozcoStats;
 
-    const countryTotal = fanCount + simpCount + haterCount + conozcoCount;
+    countryMap[canonicalName].fan += fanStats.total;
+    countryMap[canonicalName].simp += simpStats.total;
+    countryMap[canonicalName].hater += haterStats.total;
+    countryMap[canonicalName].conozco += conozcoStats.total;
+
+    const mTotal = fanStats.m + simpStats.m + haterStats.m + conozcoStats.m;
+    const fTotal = fanStats.f + simpStats.f + haterStats.f + conozcoStats.f;
+    const oTotal = fanStats.o + simpStats.o + haterStats.o + conozcoStats.o;
+
+    countryMap[canonicalName].male += mTotal;
+    countryMap[canonicalName].female += fTotal;
+    countryMap[canonicalName].other += oTotal;
+
+    const countryTotal = fanStats.total + simpStats.total + haterStats.total + conozcoStats.total;
     countryMap[canonicalName].total += countryTotal;
     totalValidVotes += countryTotal;
   }
@@ -163,16 +204,37 @@ export async function getPersonajeAudience(
           const canonicalName = coords ? coords.name : rawCountry;
 
           if (!countryMap[canonicalName]) {
-            countryMap[canonicalName] = { total: 0, fan: 0, simp: 0, hater: 0, conozco: 0 };
+            countryMap[canonicalName] = {
+              total: 0,
+              fan: 0,
+              simp: 0,
+              hater: 0,
+              conozco: 0,
+              male: 0,
+              female: 0,
+              other: 0,
+              byActitud: {
+                fan: { total: 0, m: 0, f: 0, o: 0 },
+                simp: { total: 0, m: 0, f: 0, o: 0 },
+                hater: { total: 0, m: 0, f: 0, o: 0 },
+                conozco: { total: 0, m: 0, f: 0, o: 0 }
+              }
+            };
           }
           countryMap[canonicalName].total++;
           totalValidVotes++;
 
-          const act = item.actitud?.toLowerCase();
-          if (act === 'fan') countryMap[canonicalName].fan++;
-          else if (act === 'simp') countryMap[canonicalName].simp++;
-          else if (act === 'hater') countryMap[canonicalName].hater++;
-          else if (act === 'conozco') countryMap[canonicalName].conozco++;
+          const gender = normalizeGender(item.user_gender);
+          if (gender === 'm') countryMap[canonicalName].male++;
+          else if (gender === 'f') countryMap[canonicalName].female++;
+          else countryMap[canonicalName].other++;
+
+          const act = item.actitud?.toLowerCase() as 'fan' | 'simp' | 'hater' | 'conozco';
+          if (act && countryMap[canonicalName].byActitud[act]) {
+            countryMap[canonicalName][act]++;
+            countryMap[canonicalName].byActitud[act].total++;
+            countryMap[canonicalName].byActitud[act][gender]++;
+          }
         }
       }
     } catch {
@@ -200,6 +262,9 @@ export async function getPersonajeAudience(
           simpCount: 0,
           haterCount: 0,
           conozcoCount: 0,
+          maleCount: 0,
+          femaleCount: 0,
+          otherCount: 0,
           reviewsCount: 0,
           percentageOfTotal: 0,
           isHomeCountry: true
@@ -239,19 +304,39 @@ export async function getPersonajeAudience(
       simpCount: data.simp,
       haterCount: data.hater,
       conozcoCount: data.conozco,
+      maleCount: data.male,
+      femaleCount: data.female,
+      otherCount: data.other,
       reviewsCount: 0,
       percentageOfTotal: totalValidVotes > 0 ? Math.round((data.total / totalValidVotes) * 100) : 0,
-      isHomeCountry: Boolean(personajeNationality && personajeNationality.toLowerCase().includes(countryName.toLowerCase()))
+      isHomeCountry: Boolean(personajeNationality && personajeNationality.toLowerCase().includes(countryName.toLowerCase())),
+      byActitud: {
+        fan: { ...data.byActitud.fan },
+        simp: { ...data.byActitud.simp },
+        hater: { ...data.byActitud.hater },
+        conozco: { ...data.byActitud.conozco }
+      }
     });
 
-    // Generate Guardian-style points with natural dispersion across the country based on counts
+    // Generate Guardian-style points with natural dispersion across the country based on counts & genders
     const actitudTypes: ('fan' | 'simp' | 'hater' | 'conozco')[] = ['fan', 'simp', 'hater', 'conozco'];
     for (const actType of actitudTypes) {
-      const count = data[actType];
+      const actStats = data.byActitud[actType];
+      const count = actStats.total;
       if (count <= 0) continue;
+
       // Emit points proportionally (up to 12 points per category per country for crisp rendering)
       const pointsToEmit = Math.min(count, 12);
+      
+      // Determine genders of the emitted points based on proportions
       for (let i = 0; i < pointsToEmit; i++) {
+        let pointGender: 'm' | 'f' | 'o' = 'o';
+        if (actStats.m > 0 && i < Math.round((actStats.m / count) * pointsToEmit)) {
+          pointGender = 'm';
+        } else if (actStats.f > 0) {
+          pointGender = 'f';
+        }
+
         const pointLat = generateJitter(lat, jitterMax, seedIndex++);
         const pointLng = generateJitter(lng, jitterMax, seedIndex * 1.5);
         lights.push({
@@ -260,10 +345,11 @@ export async function getPersonajeAudience(
           lat: pointLat,
           lng: pointLng,
           type: actType,
+          gender: pointGender,
           color: COLOR_MAP[actType] || COLOR_MAP.fan,
           intensity: 1.2,
           size: 0.08,
-          userName: `${count} ${actType === 'fan' ? 'Fans' : actType === 'simp' ? 'SIMPs' : actType === 'hater' ? 'Haters' : 'Audiencia'} en ${countryName}`
+          userName: `${count} ${actType === 'fan' ? 'Fans' : actType === 'simp' ? 'SIMPs' : actType === 'hater' ? 'Haters' : 'Audiencia'} en ${countryName} (${actStats.m} ♂ / ${actStats.f} ♀)`
         });
       }
     }

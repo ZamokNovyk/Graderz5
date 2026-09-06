@@ -97,11 +97,18 @@ export interface PersonajeResena {
   created_at: string;
 }
 
+export interface CountryDemographics {
+  total: number;
+  m: number; // masculino / hombres
+  f: number; // femenino / mujeres
+  o: number; // otro o no especificado
+}
+
 export interface PersonajeWorldRecord {
   id: string; // e.g. 'lalisa.manobal_fan'
   personaje_slug: string;
   actitud: 'fan' | 'simp' | 'hater' | 'conozco';
-  paises: Record<string, number>; // e.g. { "Perú": 15, "Chile": 34, "México": 8 }
+  paises: Record<string, number | CountryDemographics>; // e.g. { "Perú": { total: 5, m: 4, f: 1 } } o { "Perú": 5 }
   total: number;
   updated_at?: string;
 }

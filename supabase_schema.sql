@@ -164,3 +164,44 @@ CREATE POLICY "Cualquiera puede actualizar sus reseñas" ON public.personajes_re
 DROP POLICY IF EXISTS "Cualquiera puede eliminar sus reseñas" ON public.personajes_resenas;
 CREATE POLICY "Cualquiera puede eliminar sus reseñas" ON public.personajes_resenas FOR DELETE USING (true);
 
+
+-- ==============================================================================
+-- 6. TABLA: public.personajes_world (Radar Mundial y Demografía por País)
+-- Guarda 4 documentos por personaje (fan, simp, hater, conozco) con desglose
+-- de países y sexo en formato JSONB.
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.personajes_world (
+    id text PRIMARY KEY,                          -- Ej: 'slug_fan', 'slug_simp', etc.
+    personaje_slug text NOT NULL,
+    actitud text NOT NULL,                         -- 'fan', 'simp', 'hater', 'conozco'
+    total integer DEFAULT 0 NOT NULL,              -- Conteo total de esa actitud
+    paises jsonb DEFAULT '{}'::jsonb NOT NULL,     -- Objeto JSONB: { "Peru": { "total": 5, "m": 4, "f": 1, "o": 0 }, ... }
+    updated_at timestamptz DEFAULT now()
+);
+
+ALTER TABLE public.personajes_world ADD COLUMN IF NOT EXISTS id text;
+ALTER TABLE public.personajes_world ADD COLUMN IF NOT EXISTS personaje_slug text;
+ALTER TABLE public.personajes_world ADD COLUMN IF NOT EXISTS actitud text;
+ALTER TABLE public.personajes_world ADD COLUMN IF NOT EXISTS total integer DEFAULT 0;
+ALTER TABLE public.personajes_world ADD COLUMN IF NOT EXISTS paises jsonb DEFAULT '{}'::jsonb;
+ALTER TABLE public.personajes_world ADD COLUMN IF NOT EXISTS updated_at timestamptz DEFAULT now();
+
+CREATE INDEX IF NOT EXISTS idx_personajes_world_slug ON public.personajes_world(personaje_slug);
+CREATE INDEX IF NOT EXISTS idx_personajes_world_actitud ON public.personajes_world(actitud);
+
+-- Habilitar RLS y políticas para personajes_world
+ALTER TABLE public.personajes_world ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "personajes_world es público para lectura" ON public.personajes_world;
+CREATE POLICY "personajes_world es público para lectura" ON public.personajes_world FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "personajes_world permite inserción" ON public.personajes_world;
+CREATE POLICY "personajes_world permite inserción" ON public.personajes_world FOR INSERT WITH CHECK (true);
+
+DROP POLICY IF EXISTS "personajes_world permite actualización" ON public.personajes_world;
+CREATE POLICY "personajes_world permite actualización" ON public.personajes_world FOR UPDATE USING (true);
+
+DROP POLICY IF EXISTS "personajes_world permite eliminación" ON public.personajes_world;
+CREATE POLICY "personajes_world permite eliminación" ON public.personajes_world FOR DELETE USING (true);
+
+
