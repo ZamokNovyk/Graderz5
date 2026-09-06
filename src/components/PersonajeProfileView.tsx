@@ -1282,7 +1282,7 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
                         ) : (
                           <>
                             <Star className="w-4 h-4 fill-[#ffbf00] text-[#ffbf00]" />
-                            <span>Publicar Starpost</span>
+                            <span>¡Estrellar!</span>
                           </>
                         )}
                       </button>
