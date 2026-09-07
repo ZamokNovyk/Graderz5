@@ -19,6 +19,7 @@ import { Check, Plus } from 'lucide-react';
 
 import { auth, onAuthStateChanged, signInWithGoogle, logoutUser, User } from './lib/firebase';
 import { saveUserToSupabase } from './users/userService';
+import { preloadAllSounds } from './lib/soundService';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<NavTab>('home');
@@ -45,6 +46,7 @@ export default function App() {
 
   // URL Path router listener for /personajes/:slug and /search
   useEffect(() => {
+    preloadAllSounds();
     const handleUrlRoute = () => {
       const path = window.location.pathname;
       const searchParams = new URLSearchParams(window.location.search);

@@ -20,20 +20,9 @@ function getLocalNotifications(userUid: string): AppNotification[] {
   }
 }
 
-/**
- * Reproduce el sonido para las notificaciones internas (notisonido.mp3).
- */
-export function playNotificationSound(): void {
-  try {
-    const audio = new Audio('/sounds/notisonido.mp3');
-    audio.volume = 0.55;
-    audio.play().catch((err) => {
-      console.warn('Audio de notificación no reproducido por política del navegador:', err);
-    });
-  } catch (e) {
-    console.warn('Error al reproducir notisonido.mp3:', e);
-  }
-}
+import { playNotificationSound, unlockAudio } from './soundService';
+
+export { playNotificationSound, unlockAudio };
 
 /**
  * Guarda las notificaciones localmente.

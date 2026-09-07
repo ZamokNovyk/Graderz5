@@ -12,6 +12,7 @@ import {
   playNotificationSound
 } from '../lib/notificationsService';
 import { User } from 'firebase/auth';
+import { supabase } from '../lib/supabase';
 
 interface NotificationBellProps {
   currentUser: User | null;
@@ -31,11 +32,13 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({
   const [isActivatingPush, setIsActivatingPush] = useState(false);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const knownNotificationIdsRef = useRef<Set<string>>(new Set());
+  const initialLoadDoneRef = useRef<boolean>(false);
 
   const effectiveUid = currentUser?.uid || '';
 
-  // Cargar notificaciones
-  const loadNotifications = async () => {
+  // Cargar notificaciones y detectar nuevas para reproducir sonido
+  const loadNotifications = async (triggerSoundForNew = false) => {
     if (!effectiveUid) {
       setNotifications([]);
       setUnreadCount(0);
@@ -45,37 +48,107 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({
       const list = await getNotifications(effectiveUid);
       setNotifications(list);
       setUnreadCount(list.filter((n) => !n.read).length);
+
+      // Si no es la primera carga y se solicita verificación de sonido, detectar si hay nuevas no leídas
+      if (initialLoadDoneRef.current && triggerSoundForNew) {
+        const hasNewIncoming = list.some(
+          (notif) => !notif.read && !knownNotificationIdsRef.current.has(String(notif.id))
+        );
+        if (hasNewIncoming) {
+          playNotificationSound();
+        }
+      }
+
+      // Registrar IDs conocidos en memoria
+      list.forEach((n) => knownNotificationIdsRef.current.add(String(n.id)));
+      initialLoadDoneRef.current = true;
     } catch (e) {
       console.warn('Error al cargar notificaciones:', e);
     }
   };
 
   useEffect(() => {
-    loadNotifications();
+    // Resetear al cambiar de usuario
+    knownNotificationIdsRef.current.clear();
+    initialLoadDoneRef.current = false;
+    loadNotifications(false);
 
-    // Escuchar eventos de actualización locales
+    if (!effectiveUid) return;
+
+    // 1. Escuchar eventos de actualización locales (misma ventana o pestañas locales)
     const handleUpdate = (e: Event) => {
       const customEvt = e as CustomEvent<{ userUid?: string; isNewNotification?: boolean }>;
-      loadNotifications();
-      // Reproducir sonido si la notificación es para este usuario y es nueva
-      if (customEvt.detail?.isNewNotification && (!customEvt.detail.userUid || customEvt.detail.userUid === effectiveUid)) {
+      const isTargetUser = !customEvt.detail?.userUid || customEvt.detail.userUid === effectiveUid;
+      if (isTargetUser && customEvt.detail?.isNewNotification) {
         playNotificationSound();
       }
+      loadNotifications(false);
     };
 
     window.addEventListener('graderz5_notification_update', handleUpdate);
 
-    // Inicializar listener de Firebase Messaging
+    // 2. Suscribirse al canal en tiempo real de Supabase (Supabase Realtime)
+    let realtimeChannel: ReturnType<NonNullable<typeof supabase>['channel']> | null = null;
+    if (supabase) {
+      try {
+        const channelName = `realtime-notifs-${effectiveUid}`;
+        realtimeChannel = supabase
+          .channel(channelName)
+          .on(
+            'postgres_changes',
+            {
+              event: 'INSERT',
+              schema: 'public',
+              table: 'notificaciones',
+              filter: `recipient_uid=eq.${effectiveUid}`
+            },
+            (payload) => {
+              const newRecord = payload.new as { id?: string | number } | undefined;
+              const recordId = newRecord?.id ? String(newRecord.id) : '';
+              if (!recordId || !knownNotificationIdsRef.current.has(recordId)) {
+                if (recordId) knownNotificationIdsRef.current.add(recordId);
+                playNotificationSound();
+              }
+              loadNotifications(false);
+            }
+          )
+          .subscribe();
+      } catch (rtErr) {
+        console.warn('No se pudo suscribir a Supabase Realtime para notificaciones:', rtErr);
+      }
+    }
+
+    // 3. Polling de respaldo cada 12 segundos para detectar respuestas en vivo
+    const pollInterval = setInterval(() => {
+      loadNotifications(true);
+    }, 12000);
+
+    // 4. Verificar al re-enfocar la pestaña del navegador
+    const handleVisibilityOrFocus = () => {
+      if (document.visibilityState === 'visible') {
+        loadNotifications(true);
+      }
+    };
+    window.addEventListener('focus', handleVisibilityOrFocus);
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+
+    // 5. Inicializar listener de Firebase Messaging (Push en primer plano)
     let unsubscribeFCM: (() => void) | null = null;
     initForegroundMessaging(() => {
-      loadNotifications();
       playNotificationSound();
+      loadNotifications(false);
     }).then((unsub) => {
       unsubscribeFCM = unsub;
     });
 
     return () => {
       window.removeEventListener('graderz5_notification_update', handleUpdate);
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+      clearInterval(pollInterval);
+      if (realtimeChannel && supabase) {
+        supabase.removeChannel(realtimeChannel);
+      }
       if (unsubscribeFCM) unsubscribeFCM();
     };
   }, [effectiveUid]);

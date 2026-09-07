@@ -57,6 +57,7 @@ import { getCountryFlag } from '../data/countries';
 import { FlagImage } from './FlagImage';
 import { GuardianGlobe } from './GuardianGlobe';
 import { getPersonajeAudience, CountryAudienceStats, GlobeLightPoint } from '../lib/audienceService';
+import { playStarSound } from '../lib/soundService';
 
 interface PersonajeProfileViewProps {
   slug: string;
@@ -266,17 +267,8 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
     e.preventDefault();
     if (!personaje || isSubmittingResena || userRating === null) return;
 
-    // 1. REPRODUCIR SONIDO INMEDIATAMENTE AL PRESIONAR EL BOTÓN
-    try {
-      const audioPath = `/sounds/star${userRating}.mp3`;
-      const audio = new Audio(audioPath);
-      audio.volume = 0.6;
-      audio.play().catch((playErr) => {
-        console.warn('El navegador bloqueó la reproducción automática del audio:', playErr);
-      });
-    } catch (audioErr) {
-      console.warn('Error al iniciar el elemento Audio:', audioErr);
-    }
+    // 1. REPRODUCIR SONIDO INMEDIATAMENTE AL PRESIONAR EL BOTÓN (Pre-cargado localmente)
+    playStarSound(userRating).catch(() => {});
 
     // 2. PREPARAR DATOS Y SNAPSHOT PARA ROLLBACK
     const optimisticRating = userRating;

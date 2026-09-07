@@ -103,6 +103,8 @@ ALTER TABLE public.users ADD COLUMN IF NOT EXISTS avatar_url text;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS provider text DEFAULT 'google';
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS gender text DEFAULT 'no_especificado';
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS nationality text DEFAULT 'No especificada';
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS fcm_token text;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS notifications_enabled boolean DEFAULT true;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS last_login timestamptz DEFAULT now();
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS created_at timestamptz DEFAULT now();
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS updated_at timestamptz DEFAULT now();
@@ -237,6 +239,19 @@ CREATE POLICY "notificaciones permite inserción" ON public.notificaciones FOR I
 
 DROP POLICY IF EXISTS "notificaciones permite actualización" ON public.notificaciones;
 CREATE POLICY "notificaciones permite actualización" ON public.notificaciones FOR UPDATE USING (true);
+
+DROP POLICY IF EXISTS "notificaciones permite eliminación" ON public.notificaciones;
+CREATE POLICY "notificaciones permite eliminación" ON public.notificaciones FOR DELETE USING (true);
+
+-- Habilitar réplica en tiempo real para notificaciones instantáneas
+DO $$ 
+BEGIN 
+  ALTER PUBLICATION supabase_realtime ADD TABLE public.notificaciones;
+EXCEPTION 
+  WHEN duplicate_object THEN NULL;
+  WHEN undefined_object THEN NULL;
+  WHEN OTHERS THEN NULL;
+END $$;
 
 
 
