@@ -204,4 +204,39 @@ CREATE POLICY "personajes_world permite actualización" ON public.personajes_wor
 DROP POLICY IF EXISTS "personajes_world permite eliminación" ON public.personajes_world;
 CREATE POLICY "personajes_world permite eliminación" ON public.personajes_world FOR DELETE USING (true);
 
+-- ==============================================================================
+-- TABLA: notificaciones (Notificaciones internas y push)
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.notificaciones (
+  id BIGSERIAL PRIMARY KEY,
+  recipient_uid TEXT NOT NULL,
+  sender_uid TEXT NOT NULL,
+  sender_name TEXT NOT NULL,
+  sender_photo TEXT,
+  type TEXT NOT NULL, -- 'reply_to_review' | 'reply_to_reply'
+  personaje_slug TEXT NOT NULL,
+  personaje_nombre TEXT NOT NULL,
+  starpost_id TEXT NOT NULL,
+  reply_id TEXT NOT NULL,
+  parent_reply_id TEXT,
+  message TEXT NOT NULL,
+  read BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now())
+);
+
+CREATE INDEX IF NOT EXISTS idx_notificaciones_recipient ON public.notificaciones(recipient_uid);
+CREATE INDEX IF NOT EXISTS idx_notificaciones_read ON public.notificaciones(recipient_uid, read);
+
+ALTER TABLE public.notificaciones ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "notificaciones es accesible para lectura" ON public.notificaciones;
+CREATE POLICY "notificaciones es accesible para lectura" ON public.notificaciones FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "notificaciones permite inserción" ON public.notificaciones;
+CREATE POLICY "notificaciones permite inserción" ON public.notificaciones FOR INSERT WITH CHECK (true);
+
+DROP POLICY IF EXISTS "notificaciones permite actualización" ON public.notificaciones;
+CREATE POLICY "notificaciones permite actualización" ON public.notificaciones FOR UPDATE USING (true);
+
+
 

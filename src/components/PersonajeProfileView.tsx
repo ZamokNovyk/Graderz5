@@ -266,10 +266,70 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
     e.preventDefault();
     if (!personaje || isSubmittingResena || userRating === null) return;
 
-    setIsSubmittingResena(true);
+    // 1. REPRODUCIR SONIDO INMEDIATAMENTE AL PRESIONAR EL BOTÓN
+    try {
+      const audioPath = `/sounds/star${userRating}.mp3`;
+      const audio = new Audio(audioPath);
+      audio.volume = 0.6;
+      audio.play().catch((playErr) => {
+        console.warn('El navegador bloqueó la reproducción automática del audio:', playErr);
+      });
+    } catch (audioErr) {
+      console.warn('Error al iniciar el elemento Audio:', audioErr);
+    }
+
+    // 2. PREPARAR DATOS Y SNAPSHOT PARA ROLLBACK
+    const optimisticRating = userRating;
+    const optimisticText = userReviewText;
     const effectiveUid = currentUser?.uid || getOrCreateGuestUid();
     const userPrefs = getUserPreferences();
 
+    const prevPersonaje = personaje;
+    const prevResenasList = resenasList;
+    const prevVoteSubmitted = voteSubmitted;
+
+    // 3. ACTUALIZAR INTERFAZ AL INSTANTE (Optimistic UI)
+    setVoteSubmitted(true);
+
+    const optimisticResena: PersonajeResena = {
+      id: `temp_${Date.now()}`,
+      personaje_slug: personaje.slug,
+      personaje_nombre: personaje.nombre,
+      user_uid: effectiveUid,
+      user_name: currentUser?.displayName || currentUser?.email || 'Usuario Invitado',
+      user_gender: userPrefs.gender,
+      user_nationality: userPrefs.nationality,
+      is_anonymous: !currentUser,
+      registered_with: currentUser ? 'google' : 'anonymous',
+      review_text: optimisticText,
+      stars: optimisticRating,
+      likes_count: 0,
+      dislikes_count: 0,
+      replies_count: 0,
+      created_at: new Date().toISOString()
+    };
+
+    setResenasList(prev => {
+      const filtered = prev.filter(r => r.user_uid !== effectiveUid);
+      return [optimisticResena, ...filtered];
+    });
+
+    setPersonaje(prev => {
+      if (!prev) return prev;
+      const wasVoted = prevVoteSubmitted;
+      const newVotesCount = wasVoted ? prev.votes_count : (prev.votes_count + 1);
+      const currentSum = prev.rating * prev.votes_count;
+      const newSum = wasVoted ? (currentSum - prev.rating + optimisticRating) : (currentSum + optimisticRating);
+      const newRating = newVotesCount > 0 ? (newSum / newVotesCount) : optimisticRating;
+      return {
+        ...prev,
+        votes_count: newVotesCount,
+        rating: Math.min(5, Math.max(1, Number(newRating.toFixed(2))))
+      };
+    });
+
+    // 4. TRABAJO EN SEGUNDO PLANO EN SUPABASE
+    setIsSubmittingResena(true);
     try {
       const res = await saveResena({
         personajeSlug: personaje.slug,
@@ -280,11 +340,12 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
         userNationality: userPrefs.nationality,
         isAnonymous: !currentUser,
         registeredWith: currentUser ? 'google' : 'anonymous',
-        reviewText: userReviewText,
-        stars: userRating
+        reviewText: optimisticText,
+        stars: optimisticRating
       });
 
       if (res.success) {
+        // En segundo plano sincronizar IDs oficiales y datos del servidor
         const updatedChar = await getPersonajeBySlug(personaje.slug);
         if (updatedChar) {
           setPersonaje(updatedChar);
@@ -292,10 +353,18 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
 
         const reviews = await getResenasForPersonaje(personaje.slug);
         setResenasList(reviews);
-        setVoteSubmitted(true);
+      } else {
+        // Rollback si la respuesta no fue exitosa
+        console.warn('Fallo al guardar reseña en backend, revirtiendo UI...');
+        setPersonaje(prevPersonaje);
+        setResenasList(prevResenasList);
+        setVoteSubmitted(prevVoteSubmitted);
       }
     } catch (err) {
-      console.error('Error al guardar reseña:', err);
+      console.error('Error al guardar reseña en segundo plano, revirtiendo UI:', err);
+      setPersonaje(prevPersonaje);
+      setResenasList(prevResenasList);
+      setVoteSubmitted(prevVoteSubmitted);
     } finally {
       setIsSubmittingResena(false);
     }
@@ -303,9 +372,36 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
 
   const handleDeleteResena = async () => {
     if (!personaje || isSubmittingResena) return;
-    setIsSubmittingResena(true);
+
+    // Snapshot para rollback
+    const prevPersonaje = personaje;
+    const prevResenasList = resenasList;
+    const prevRating = userRating;
+    const prevText = userReviewText;
     const effectiveUid = currentUser?.uid || getOrCreateGuestUid();
 
+    // Actualización optimista inmediata
+    setUserRating(null);
+    setVoteSubmitted(false);
+    setUserReviewText('');
+    setIsConfirmDeleteStarpostOpen(false);
+
+    setResenasList(prev => prev.filter(r => r.user_uid !== effectiveUid));
+
+    setPersonaje(prev => {
+      if (!prev) return prev;
+      const newVotesCount = Math.max(0, prev.votes_count - 1);
+      const currentSum = prev.rating * prev.votes_count;
+      const newSum = Math.max(0, currentSum - (prevRating || 0));
+      const newRating = newVotesCount > 0 ? (newSum / newVotesCount) : 0;
+      return {
+        ...prev,
+        votes_count: newVotesCount,
+        rating: Math.min(5, Math.max(0, Number(newRating.toFixed(2))))
+      };
+    });
+
+    setIsSubmittingResena(true);
     try {
       const success = await deleteResena(personaje.slug, effectiveUid);
       if (success) {
@@ -316,14 +412,21 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
 
         const reviews = await getResenasForPersonaje(personaje.slug);
         setResenasList(reviews);
-
-        setUserRating(null);
-        setVoteSubmitted(false);
-        setUserReviewText('');
-        setIsConfirmDeleteStarpostOpen(false);
+      } else {
+        // Rollback
+        setPersonaje(prevPersonaje);
+        setResenasList(prevResenasList);
+        setUserRating(prevRating);
+        setUserReviewText(prevText);
+        setVoteSubmitted(true);
       }
     } catch (err) {
       console.error('Error al eliminar reseña:', err);
+      setPersonaje(prevPersonaje);
+      setResenasList(prevResenasList);
+      setUserRating(prevRating);
+      setUserReviewText(prevText);
+      setVoteSubmitted(true);
     } finally {
       setIsSubmittingResena(false);
     }

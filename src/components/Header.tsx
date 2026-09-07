@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { Download, Flame, LogOut, User as UserIcon, LogIn, Search } from 'lucide-react';
 import { User } from 'firebase/auth';
 import AutocompleteSearchBar from './AutocompleteSearchBar';
+import { NotificationBell } from './NotificationBell';
+import { AppNotification } from '../types';
 
 interface HeaderProps {
   searchQuery: string;
@@ -14,6 +16,7 @@ interface HeaderProps {
   onSignOut: () => void;
   isLoggingIn?: boolean;
   onGoHome?: () => void;
+  onSelectNotification?: (notification: AppNotification) => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -27,6 +30,7 @@ export const Header: React.FC<HeaderProps> = ({
   onSignOut,
   isLoggingIn,
   onGoHome,
+  onSelectNotification,
 }) => {
   const [showUserMenu, setShowUserMenu] = useState(false);
 
@@ -107,28 +111,35 @@ export const Header: React.FC<HeaderProps> = ({
             <span>{isLoggingIn ? 'Conectando...' : 'Unirse'}</span>
           </button>
         ) : (
-          <div className="relative">
-            <button
-              id="user-profile-menu-button"
-              onClick={() => setShowUserMenu(!showUserMenu)}
-              className="flex items-center gap-2 bg-[#141419] border border-red-500/40 hover:border-red-500 px-3 py-1.5 rounded-full text-xs font-semibold text-white transition-all cursor-pointer"
-            >
-              {currentUser.photoURL ? (
-                <img
-                  src={currentUser.photoURL}
-                  alt={currentUser.displayName || 'Usuario'}
-                  className="w-6 h-6 rounded-full object-cover border border-red-500/50"
-                  referrerPolicy="no-referrer"
-                />
-              ) : (
-                <div className="w-6 h-6 rounded-full bg-red-600 text-white flex items-center justify-center font-bold text-xs">
-                  {currentUser.displayName ? currentUser.displayName.charAt(0).toUpperCase() : 'U'}
-                </div>
-              )}
-              <span className="hidden sm:inline max-w-[100px] truncate">
-                {currentUser.displayName || 'Mi Cuenta'}
-              </span>
-            </button>
+          <div className="flex items-center gap-2.5">
+            {/* Notification Bell */}
+            <NotificationBell
+              currentUser={currentUser}
+              onSelectNotification={onSelectNotification || (() => {})}
+            />
+
+            {/* Compact circular user profile button (avatar only) */}
+            <div className="relative">
+              <button
+                id="user-profile-menu-button"
+                onClick={() => setShowUserMenu(!showUserMenu)}
+                className="w-9 h-9 flex items-center justify-center bg-[#141419] border border-red-500/40 hover:border-red-500 rounded-full transition-all cursor-pointer overflow-hidden p-0.5 shadow-sm active:scale-95"
+                title={currentUser.displayName || 'Mi Cuenta'}
+                aria-label={currentUser.displayName || 'Mi Cuenta'}
+              >
+                {currentUser.photoURL ? (
+                  <img
+                    src={currentUser.photoURL}
+                    alt={currentUser.displayName || 'Usuario'}
+                    className="w-full h-full rounded-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div className="w-full h-full rounded-full bg-red-600 text-white flex items-center justify-center font-bold text-xs">
+                    {currentUser.displayName ? currentUser.displayName.charAt(0).toUpperCase() : 'U'}
+                  </div>
+                )}
+              </button>
 
             {/* Dropdown menu */}
             {showUserMenu && (
@@ -158,6 +169,7 @@ export const Header: React.FC<HeaderProps> = ({
                 </div>
               </div>
             )}
+            </div>
           </div>
         )}
 

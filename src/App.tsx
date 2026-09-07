@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { NavTab, SearchCategory, SearchResultItem } from './types';
+import { NavTab, SearchCategory, SearchResultItem, AppNotification } from './types';
 import { Header } from './components/Header';
 import { HeroSection } from './components/HeroSection';
 import { ProfileView } from './components/ProfileView';
@@ -14,6 +14,7 @@ import { AddPersonajeModal } from './components/AddPersonajeModal';
 import { SearchModal } from './components/SearchModal';
 import { PersonajeProfileView } from './components/PersonajeProfileView';
 import { SearchResultsView } from './components/SearchResultsView';
+import { NotificationThreadModal } from './components/NotificationThreadModal';
 import { Check, Plus } from 'lucide-react';
 
 import { auth, onAuthStateChanged, signInWithGoogle, logoutUser, User } from './lib/firebase';
@@ -35,6 +36,7 @@ export default function App() {
   // Auth State
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [selectedNotification, setSelectedNotification] = useState<AppNotification | null>(null);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -158,6 +160,7 @@ export default function App() {
         onSignOut={handleSignOut}
         isLoggingIn={isLoggingIn}
         onGoHome={handleBackFromPersonaje}
+        onSelectNotification={setSelectedNotification}
       />
 
       {/* Main Content Area */}
@@ -256,6 +259,18 @@ export default function App() {
         item={selectedItem}
         onClose={() => setSelectedItem(null)}
       />
+
+      {/* Notification Thread Modal */}
+      {selectedNotification && (
+        <NotificationThreadModal
+          notification={selectedNotification}
+          onClose={() => setSelectedNotification(null)}
+          onNavigateToPersonaje={(slug) => {
+            setSelectedNotification(null);
+            handleOpenPersonaje(slug);
+          }}
+        />
+      )}
 
       {/* Toast feedback */}
       {toastMessage && (

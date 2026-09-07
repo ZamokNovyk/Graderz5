@@ -1,7 +1,7 @@
 import { initializeApp, getApps } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut as firebaseSignOut, onAuthStateChanged, updateProfile, User } from 'firebase/auth';
 
-const firebaseConfig = {
+export const firebaseConfig = {
   apiKey: "AIzaSyDvv52ue8-1EqI92Uae6DHuyQG3BD9xvcw",
   authDomain: "graderz5-usuarios.firebaseapp.com",
   projectId: "graderz5-usuarios",
@@ -12,7 +12,7 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase App
-const app = !getApps().length ? initializeApp(firebaseConfig) : getApps()[0];
+export const app = !getApps().length ? initializeApp(firebaseConfig) : getApps()[0];
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 

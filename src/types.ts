@@ -143,6 +143,23 @@ export interface PersonajeWorldRecord {
   updated_at?: string;
 }
 
+export interface AppNotification {
+  id: string;
+  recipient_uid: string;
+  sender_uid: string;
+  sender_name: string;
+  sender_photo?: string;
+  type: 'reply_to_review' | 'reply_to_reply';
+  personaje_slug: string;
+  personaje_nombre: string;
+  starpost_id: string;
+  reply_id: string;
+  parent_reply_id?: string | null;
+  message: string;
+  read: boolean;
+  created_at: string;
+}
+
 declare module 'globe.gl';
 
 

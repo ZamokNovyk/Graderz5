@@ -19,6 +19,7 @@ import {
   deleteStarpostReply,
   deleteResenaById
 } from '../lib/resenasService';
+import { createNotification } from '../lib/notificationsService';
 import { getOrCreateGuestUid } from '../lib/actitudesService';
 import { FlagImage } from './FlagImage';
 import { ConfirmDeleteModal } from './ConfirmDeleteModal';
@@ -167,6 +168,22 @@ export const StarpostRepliesModal: React.FC<StarpostRepliesModalProps> = ({
       setMainInputText('');
 
       onRepliesCountChange?.(starpost.id, updatedReplies.length);
+
+      // Notificar al autor del Starpost si es un usuario diferente
+      if (starpost.user_uid && starpost.user_uid !== effectiveUid) {
+        createNotification({
+          recipientUid: starpost.user_uid,
+          senderUid: effectiveUid,
+          senderName: userName,
+          senderPhoto: currentUser?.photoURL || undefined,
+          type: 'reply_to_review',
+          personajeSlug: starpost.personaje_slug,
+          personajeNombre: starpost.personaje_nombre || starpost.personaje_slug,
+          starpostId: starpost.id,
+          replyId: newReply.id,
+          message: `${userName} te ha respondido en ${starpost.personaje_nombre || starpost.personaje_slug}`
+        }).catch((e) => console.warn('Error enviando notificación:', e));
+      }
     } catch (err) {
       console.error('Error al responder al Starpost:', err);
     } finally {
@@ -185,6 +202,7 @@ export const StarpostRepliesModal: React.FC<StarpostRepliesModalProps> = ({
       const userName = currentUser?.displayName || currentUser?.email?.split('@')[0] || guestUserData?.alias || 'Invitado';
       const userGender = guestUserData?.gender;
       const userNationality = guestUserData?.nationality;
+      const parentReplyTarget = replies.find((r) => r.id === inlineReplyState.parentId);
 
       const newReply = await addReplyToStarpost({
         starpostId: starpost.id,
@@ -206,6 +224,23 @@ export const StarpostRepliesModal: React.FC<StarpostRepliesModalProps> = ({
       setInlineReplyState(null);
 
       onRepliesCountChange?.(starpost.id, updatedReplies.length);
+
+      // Notificar al autor del comentario respondido si es un usuario diferente
+      if (parentReplyTarget && parentReplyTarget.user_uid && parentReplyTarget.user_uid !== effectiveUid) {
+        createNotification({
+          recipientUid: parentReplyTarget.user_uid,
+          senderUid: effectiveUid,
+          senderName: userName,
+          senderPhoto: currentUser?.photoURL || undefined,
+          type: 'reply_to_reply',
+          personajeSlug: starpost.personaje_slug,
+          personajeNombre: starpost.personaje_nombre || starpost.personaje_slug,
+          starpostId: starpost.id,
+          parentReplyId: inlineReplyState.parentId,
+          replyId: newReply.id,
+          message: `${userName} respondió a tu comentario en ${starpost.personaje_nombre || starpost.personaje_slug}`
+        }).catch((e) => console.warn('Error enviando notificación:', e));
+      }
     } catch (err) {
       console.error('Error al enviar respuesta en línea:', err);
     } finally {
