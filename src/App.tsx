@@ -266,6 +266,7 @@ export default function App() {
       {selectedNotification && (
         <NotificationThreadModal
           notification={selectedNotification}
+          currentUser={currentUser}
           onClose={() => setSelectedNotification(null)}
           onNavigateToPersonaje={(slug) => {
             setSelectedNotification(null);
