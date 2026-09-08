@@ -77,8 +77,8 @@ export const Header: React.FC<HeaderProps> = ({
         />
       </div>
 
-      {/* Right Action Controls: Unirse Button & Download */}
-      <div className="flex items-center gap-3 relative">
+      {/* Right Action Controls: Notifications, Download PWA, User Profile */}
+      <div className="flex items-center gap-2.5 sm:gap-3 relative">
         {/* Mobile Search Button */}
         <button
           id="header-mobile-search-btn"
@@ -89,7 +89,25 @@ export const Header: React.FC<HeaderProps> = ({
           <Search className="w-4 h-4" />
         </button>
 
-        {/* "Unirse" Button or User Profile pill */}
+        {/* 1. Botón de Notificaciones (si hay usuario autenticado) */}
+        {currentUser && (
+          <NotificationBell
+            currentUser={currentUser}
+            onSelectNotification={onSelectNotification || (() => {})}
+          />
+        )}
+
+        {/* 2. Botón de Descargar PWA */}
+        <button
+          id="header-action-download"
+          onClick={onDownloadApp}
+          title="Instalar Graderz5 App (PWA)"
+          className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-[#141419] border border-white/10 hover:border-red-500/40 hover:bg-[#1c1c24] text-zinc-300 hover:text-red-400 flex items-center justify-center transition-all duration-200 active:scale-95 cursor-pointer"
+        >
+          <Download className="w-4 h-4" />
+        </button>
+
+        {/* 3. Botón de Usuario (Avatar o Unirse) */}
         {!currentUser ? (
           <button
             id="join-google-auth-button"
@@ -110,35 +128,27 @@ export const Header: React.FC<HeaderProps> = ({
             <span>{isLoggingIn ? 'Conectando...' : 'Unirse'}</span>
           </button>
         ) : (
-          <div className="flex items-center gap-2.5">
-            {/* Notification Bell */}
-            <NotificationBell
-              currentUser={currentUser}
-              onSelectNotification={onSelectNotification || (() => {})}
-            />
-
-            {/* Compact circular user profile button (avatar only) */}
-            <div className="relative">
-              <button
-                id="user-profile-menu-button"
-                onClick={() => setShowUserMenu(!showUserMenu)}
-                className="w-9 h-9 flex items-center justify-center bg-[#141419] border border-red-500/40 hover:border-red-500 rounded-full transition-all cursor-pointer overflow-hidden p-0.5 shadow-sm active:scale-95"
-                title={currentUser.displayName || 'Mi Cuenta'}
-                aria-label={currentUser.displayName || 'Mi Cuenta'}
-              >
-                {currentUser.photoURL ? (
-                  <img
-                    src={currentUser.photoURL}
-                    alt={currentUser.displayName || 'Usuario'}
-                    className="w-full h-full rounded-full object-cover"
-                    referrerPolicy="no-referrer"
-                  />
-                ) : (
-                  <div className="w-full h-full rounded-full bg-red-600 text-white flex items-center justify-center font-bold text-xs">
-                    {currentUser.displayName ? currentUser.displayName.charAt(0).toUpperCase() : 'U'}
-                  </div>
-                )}
-              </button>
+          <div className="relative">
+            <button
+              id="user-profile-menu-button"
+              onClick={() => setShowUserMenu(!showUserMenu)}
+              className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center bg-[#141419] border border-red-500/40 hover:border-red-500 rounded-full transition-all cursor-pointer overflow-hidden p-0.5 shadow-sm active:scale-95"
+              title={currentUser.displayName || 'Mi Cuenta'}
+              aria-label={currentUser.displayName || 'Mi Cuenta'}
+            >
+              {currentUser.photoURL ? (
+                <img
+                  src={currentUser.photoURL}
+                  alt={currentUser.displayName || 'Usuario'}
+                  className="w-full h-full rounded-full object-cover"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <div className="w-full h-full rounded-full bg-red-600 text-white flex items-center justify-center font-bold text-xs">
+                  {currentUser.displayName ? currentUser.displayName.charAt(0).toUpperCase() : 'U'}
+                </div>
+              )}
+            </button>
 
             {/* Dropdown menu */}
             {showUserMenu && (
@@ -168,19 +178,8 @@ export const Header: React.FC<HeaderProps> = ({
                 </div>
               </div>
             )}
-            </div>
           </div>
         )}
-
-        {/* Download App Icon */}
-        <button
-          id="header-action-download"
-          onClick={onDownloadApp}
-          title="Instalar Graderz5 App (PWA)"
-          className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-[#141419] border border-white/10 hover:border-red-500/40 hover:bg-[#1c1c24] text-zinc-300 hover:text-red-400 flex items-center justify-center transition-all duration-200 active:scale-95 cursor-pointer"
-        >
-          <Download className="w-4 h-4" />
-        </button>
       </div>
     </header>
   );
