@@ -87,7 +87,7 @@ export const PWAInstallModal: React.FC<PWAInstallModalProps> = ({
               className="w-full h-full object-contain rounded-xl"
               onError={(e) => {
                 // Fallback a logograderz5 si es necesario
-                (e.target as HTMLImageElement).src = '/imagenes/logograderz5.jpg';
+                (e.target as HTMLImageElement).src = '/imagenes/logograderz5.png';
               }}
             />
           </div>

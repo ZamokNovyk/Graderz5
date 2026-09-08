@@ -1,13 +1,13 @@
 // Service Worker for Graderz5 PWA
-const CACHE_NAME = 'graderz5-cache-v2';
+const CACHE_NAME = 'graderz5-cache-v1';
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
   '/imagenes/favicon.png',
-  '/imagenes/logograderz5.jpg',
-  '/imagenes/180.jpg',
-  '/imagenes/pwa192.jpg',
-  '/imagenes/pwa512.jpg'
+  '/imagenes/logograderz5.png',
+  '/imagenes/180.png',
+  '/imagenes/pwa192.png',
+  '/imagenes/pwa512.png'
 ];
 
 self.addEventListener('install', (event) => {
