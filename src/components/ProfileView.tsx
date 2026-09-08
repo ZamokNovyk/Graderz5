@@ -57,12 +57,14 @@ type InteractionDivision = 'fan' | 'simp' | 'hater' | 'conozco';
 interface ProfileViewProps {
   currentUser: User | null;
   onSignInGoogle: () => void;
+  isLoggingIn?: boolean;
   onSelectPersonaje?: (slug: string) => void;
 }
 
 export const ProfileView: React.FC<ProfileViewProps> = ({ 
   currentUser, 
   onSignInGoogle,
+  isLoggingIn,
   onSelectPersonaje 
 }) => {
   // Main Tab Navigation
@@ -529,6 +531,88 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       desc: 'Personajes que conoces o has explorado'
     }
   };
+
+  // Vista para usuarios no autenticados / que entran por primera vez
+  if (!currentUser) {
+    return (
+      <div className="w-full max-w-md mx-auto px-4 py-12 sm:py-16 pb-36 flex flex-col items-center justify-center animate-in fade-in duration-300">
+        <div className="w-full bg-[#121217] border border-white/10 rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden text-center flex flex-col items-center">
+          {/* Ambient Red Glow */}
+          <div className="absolute -top-14 -right-14 w-40 h-40 bg-red-600/20 rounded-full blur-3xl pointer-events-none"></div>
+          <div className="absolute -bottom-14 -left-14 w-40 h-40 bg-red-900/20 rounded-full blur-3xl pointer-events-none"></div>
+
+          {/* Logo / Badge */}
+          <div className="relative mb-5">
+            <div className="w-20 h-20 sm:w-22 sm:h-22 rounded-3xl bg-gradient-to-br from-red-600 via-red-800 to-black p-0.5 shadow-2xl shadow-red-950/80 flex items-center justify-center border border-red-500/40">
+              <div className="w-full h-full bg-[#181820] rounded-[22px] flex items-center justify-center overflow-hidden p-1.5">
+                <img
+                  src="/imagenes/logograderz5.jpg"
+                  alt="Graderz5"
+                  className="w-full h-full object-cover rounded-2xl"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = '/imagenes/favicon.png';
+                  }}
+                />
+              </div>
+            </div>
+            <div className="absolute -bottom-1 -right-1 bg-red-600 rounded-full p-1.5 border-2 border-[#121217] shadow-md">
+              <Crown className="w-3.5 h-3.5 text-white" />
+            </div>
+          </div>
+
+          {/* Titles */}
+          <h2 className="text-2xl sm:text-3xl font-black text-white font-display tracking-tight mb-2">
+            Inicia sesión en <span className="text-white">Graderz</span><span className="text-red-500">5</span>
+          </h2>
+          <p className="text-xs sm:text-sm text-zinc-400 max-w-xs sm:max-w-sm mb-6 leading-relaxed">
+            Conecta tu cuenta de Google para acceder a tu perfil, personalizar tu nombre de usuario, calificar personajes y guardar tus valoraciones.
+          </p>
+
+          {/* Prominent Google Sign-In Button */}
+          <button
+            id="profile-google-login-btn"
+            onClick={onSignInGoogle}
+            disabled={isLoggingIn}
+            className="w-full flex items-center justify-center gap-3 bg-gradient-to-r from-red-600 via-red-600 to-red-700 hover:from-red-500 hover:to-red-600 active:scale-95 text-white font-bold text-sm sm:text-base py-3.5 px-6 rounded-2xl shadow-xl shadow-red-950/80 border border-red-400/40 transition-all cursor-pointer disabled:opacity-50"
+          >
+            {isLoggingIn ? (
+              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            ) : (
+              <svg className="w-5 h-5 fill-current shrink-0" viewBox="0 0 24 24">
+                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#FFFFFF"/>
+                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#FFFFFF"/>
+                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FFFFFF"/>
+                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#FFFFFF"/>
+              </svg>
+            )}
+            <span>{isLoggingIn ? 'Conectando con Google...' : 'Iniciar sesión con Google'}</span>
+          </button>
+
+          {/* Features list */}
+          <div className="mt-7 pt-5 border-t border-white/5 w-full space-y-2.5 text-left">
+            <div className="flex items-center gap-2.5 text-xs text-zinc-300">
+              <div className="w-6 h-6 rounded-lg bg-red-500/10 border border-red-500/20 flex items-center justify-center shrink-0">
+                <ShieldCheck className="w-3.5 h-3.5 text-red-400" />
+              </div>
+              <span>Perfil oficial con nombre único y avatar sincronizado</span>
+            </div>
+            <div className="flex items-center gap-2.5 text-xs text-zinc-300">
+              <div className="w-6 h-6 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
+                <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400/20" />
+              </div>
+              <span>Guarda tus calificaciones, votos y personajes favoritos</span>
+            </div>
+            <div className="flex items-center gap-2.5 text-xs text-zinc-300">
+              <div className="w-6 h-6 rounded-lg bg-red-500/10 border border-red-500/20 flex items-center justify-center shrink-0">
+                <Flame className="w-3.5 h-3.5 text-red-400 fill-red-400/20" />
+              </div>
+              <span>Publica reseñas, interactúa en Starsposts y recibe notificaciones</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full max-w-3xl mx-auto px-4 py-8 pb-32 space-y-6">

@@ -4,10 +4,10 @@ const STATIC_ASSETS = [
   '/',
   '/manifest.json',
   '/imagenes/favicon.png',
-  '/imagenes/logograderz5.png',
-  '/imagenes/180.png',
-  '/imagenes/pwa192.png',
-  '/imagenes/pwa512.png'
+  '/imagenes/logograderz5.jpg',
+  '/imagenes/180.jpg',
+  '/imagenes/pwa192.jpg',
+  '/imagenes/pwa512.jpg'
 ];
 
 self.addEventListener('install', (event) => {
