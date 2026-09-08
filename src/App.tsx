@@ -15,6 +15,8 @@ import { SearchModal } from './components/SearchModal';
 import { PersonajeProfileView } from './components/PersonajeProfileView';
 import { SearchResultsView } from './components/SearchResultsView';
 import { NotificationThreadModal } from './components/NotificationThreadModal';
+import { PWAInstallModal } from './components/PWAInstallModal';
+import { usePWAInstall } from './lib/usePWAInstall';
 import { Check, Plus } from 'lucide-react';
 
 import { auth, onAuthStateChanged, signInWithGoogle, logoutUser, User } from './lib/firebase';
@@ -38,6 +40,10 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [selectedNotification, setSelectedNotification] = useState<AppNotification | null>(null);
+
+  // PWA Install state
+  const [isPWAInstallModalOpen, setIsPWAInstallModalOpen] = useState(false);
+  const { isInstalled, isIOS, canInstallNative, promptInstall } = usePWAInstall();
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -113,8 +119,15 @@ export default function App() {
     }
   };
 
-  const handleDownloadApp = () => {
-    showToast('Enlace de Graderz5 copiado para compartir');
+  const handleDownloadApp = async () => {
+    if (canInstallNative) {
+      const outcome = await promptInstall();
+      if (outcome === 'accepted') {
+        showToast('¡Graderz5 instalada en tu dispositivo!');
+        return;
+      }
+    }
+    setIsPWAInstallModalOpen(true);
   };
 
   const handleOpenPersonaje = (slug: string) => {
@@ -274,6 +287,17 @@ export default function App() {
           }}
         />
       )}
+
+      {/* PWA Install Modal */}
+      <PWAInstallModal
+        isOpen={isPWAInstallModalOpen}
+        onClose={() => setIsPWAInstallModalOpen(false)}
+        canInstallNative={canInstallNative}
+        isIOS={isIOS}
+        isInstalled={isInstalled}
+        onInstallNative={promptInstall}
+        onShowToast={showToast}
+      />
 
       {/* Toast feedback */}
       {toastMessage && (

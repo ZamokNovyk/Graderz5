@@ -42,13 +42,12 @@ export const Header: React.FC<HeaderProps> = ({
         onClick={onGoHome}
         className="flex items-center gap-2.5 cursor-pointer select-none group"
       >
-        <div className="relative w-10 h-10 rounded-full bg-gradient-to-br from-red-600 via-red-700 to-black p-0.5 shadow-lg shadow-red-950/50 flex items-center justify-center border border-red-500/30 group-hover:scale-105 transition-transform duration-200">
-          <div className="w-full h-full rounded-full bg-[#0d0d12] flex items-center justify-center relative overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-br from-red-500/20 to-transparent"></div>
-            <span className="font-extrabold text-xs tracking-tighter text-red-500 flex items-center gap-0.5">
-              <Flame className="w-4 h-4 text-red-500 fill-red-500/30" />
-            </span>
-          </div>
+        <div className="relative w-10 h-10 rounded-full bg-gradient-to-br from-red-600 via-red-700 to-black p-0.5 shadow-lg shadow-red-950/50 flex items-center justify-center border border-red-500/30 group-hover:scale-105 transition-transform duration-200 overflow-hidden">
+          <img 
+            src="/imagenes/logograderz5.png" 
+            alt="Graderz5 Logo" 
+            className="w-full h-full rounded-full object-cover"
+          />
         </div>
         <div className="flex items-baseline">
           <span className="font-black text-xl tracking-tight text-white font-display">
@@ -177,7 +176,7 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           id="header-action-download"
           onClick={onDownloadApp}
-          title="Descargar o Compartir App"
+          title="Instalar Graderz5 App (PWA)"
           className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-[#141419] border border-white/10 hover:border-red-500/40 hover:bg-[#1c1c24] text-zinc-300 hover:text-red-400 flex items-center justify-center transition-all duration-200 active:scale-95 cursor-pointer"
         >
           <Download className="w-4 h-4" />
