@@ -1,9 +1,14 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { AppNotification, PersonajeResena, StarpostReply } from '../types';
+import { AppNotification, PersonajeResena, StarpostReply, StarpostReactionType } from '../types';
 import { getNotificationThread, createNotification } from '../lib/notificationsService';
-import { addReplyToStarpost } from '../lib/resenasService';
+import { 
+  addReplyToStarpost, 
+  toggleStarpostReaction, 
+  getUserReactionsForStarposts 
+} from '../lib/resenasService';
 import { getOrCreateGuestUid, getUserPreferences } from '../lib/actitudesService';
 import { User } from '../lib/firebase';
+import { FlagImage } from './FlagImage';
 import { 
   X, 
   MessageSquare, 
@@ -12,7 +17,10 @@ import {
   ExternalLink, 
   Send, 
   Check, 
-  AlertCircle 
+  AlertCircle,
+  ThumbsUp,
+  ThumbsDown,
+  User as UserIcon
 } from 'lucide-react';
 
 interface NotificationThreadModalProps {
@@ -33,6 +41,12 @@ export const NotificationThreadModal: React.FC<NotificationThreadModalProps> = (
   const [reply1, setReply1] = useState<StarpostReply | null>(null);
   const [reply2, setReply2] = useState<StarpostReply | null>(null);
 
+  // Estados de reacciones para la tarjeta de la reseña original
+  const [resenaLikes, setResenaLikes] = useState(0);
+  const [resenaDislikes, setResenaDislikes] = useState(0);
+  const [myReaction, setMyReaction] = useState<StarpostReactionType | null>(null);
+  const [isReacting, setIsReacting] = useState(false);
+
   // Estados para responder directamente desde la notificación
   const [replyText, setReplyText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -52,6 +66,8 @@ export const NotificationThreadModal: React.FC<NotificationThreadModalProps> = (
     setSuccessMsg(null);
     setErrorMsg(null);
 
+    const effectiveUid = currentUser?.uid || getOrCreateGuestUid();
+
     getNotificationThread({
       starpostId: notification.starpost_id,
       replyId: notification.reply_id,
@@ -59,10 +75,23 @@ export const NotificationThreadModal: React.FC<NotificationThreadModalProps> = (
       personajeSlug: notification.personaje_slug
     })
       .then((data) => {
-        if (isMounted) {
-          setResena(data.resena);
-          setReply1(data.reply1);
-          setReply2(data.reply2);
+        if (!isMounted) return;
+
+        setResena(data.resena);
+        setReply1(data.reply1);
+        setReply2(data.reply2);
+
+        if (data.resena) {
+          setResenaLikes(data.resena.likes_count ?? 0);
+          setResenaDislikes(data.resena.dislikes_count ?? 0);
+
+          getUserReactionsForStarposts(effectiveUid, [data.resena.id])
+            .then((reactions) => {
+              if (isMounted) {
+                setMyReaction(reactions[data.resena!.id] || null);
+              }
+            })
+            .catch(() => {});
         }
       })
       .finally(() => {
@@ -74,22 +103,73 @@ export const NotificationThreadModal: React.FC<NotificationThreadModalProps> = (
     return () => {
       isMounted = false;
     };
-  }, [notification]);
+  }, [notification, currentUser]);
 
   if (!notification) return null;
 
   const isReplyToReply = notification.type === 'reply_to_reply';
 
-  // Identificar el destinatario de la respuesta y el ID padre correspondiente en la jerarquía
+  // Identificar destinatario y padre jerárquico
   const targetUserName = reply2?.user_name || notification.sender_name || 'Usuario';
   const targetUserUid = reply2?.user_uid || notification.sender_uid || '';
 
-  // Determinar parent_id para mantener la consistencia con Graderz5
-  // Si reply2 existe, su parent es reply1?.id || reply2.parent_id || reply2.id
-  // Si es respuesta a reseña, parent es reply1?.id || notification.reply_id
   const effectiveParentId = reply2 
     ? (reply1?.id || reply2.parent_id || reply2.id)
     : (reply1?.id || notification.reply_id);
+
+  // Manejador de reacciones (Like / Dislike) en la tarjeta de la reseña
+  const handleReaction = async (type: StarpostReactionType) => {
+    if (!resena || isReacting) return;
+    const effectiveUid = currentUser?.uid || getOrCreateGuestUid();
+
+    const prevReaction = myReaction;
+    const prevLikes = resenaLikes;
+    const prevDislikes = resenaDislikes;
+
+    let nextReaction: StarpostReactionType | null = null;
+    let nextLikes = prevLikes;
+    let nextDislikes = prevDislikes;
+
+    if (prevReaction === type) {
+      nextReaction = null;
+      if (type === 'like') nextLikes = Math.max(0, nextLikes - 1);
+      else nextDislikes = Math.max(0, nextDislikes - 1);
+    } else {
+      nextReaction = type;
+      if (type === 'like') {
+        nextLikes += 1;
+        if (prevReaction === 'dislike') nextDislikes = Math.max(0, nextDislikes - 1);
+      } else {
+        nextDislikes += 1;
+        if (prevReaction === 'like') nextLikes = Math.max(0, nextLikes - 1);
+      }
+    }
+
+    setMyReaction(nextReaction);
+    setResenaLikes(nextLikes);
+    setResenaDislikes(nextDislikes);
+    setIsReacting(true);
+
+    try {
+      const res = await toggleStarpostReaction({
+        starpostId: resena.id,
+        userUid: effectiveUid,
+        reaction: type
+      });
+      if (res) {
+        setMyReaction(res.activeReaction);
+        setResenaLikes(res.likesCount);
+        setResenaDislikes(res.dislikesCount);
+      }
+    } catch (err) {
+      console.error('Error al actualizar reacción en el modal:', err);
+      setMyReaction(prevReaction);
+      setResenaLikes(prevLikes);
+      setResenaDislikes(prevDislikes);
+    } finally {
+      setIsReacting(false);
+    }
+  };
 
   const handleSubmitReply = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -119,7 +199,7 @@ export const NotificationThreadModal: React.FC<NotificationThreadModalProps> = (
         commentText: cleanContent
       });
 
-      // 2. Notificar al autor del comentario/respuesta objetivo si no es el mismo usuario
+      // 2. Notificar al autor objetivo si no es el mismo
       if (targetUserUid && targetUserUid !== effectiveUid) {
         createNotification({
           recipientUid: targetUserUid,
@@ -142,7 +222,6 @@ export const NotificationThreadModal: React.FC<NotificationThreadModalProps> = (
       setSuccessMsg('¡Respuesta publicada!');
       setTimeout(() => setSuccessMsg(null), 3000);
 
-      // Desplazar suavemente hacia la nueva respuesta
       setTimeout(() => {
         chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
       }, 100);
@@ -154,10 +233,24 @@ export const NotificationThreadModal: React.FC<NotificationThreadModalProps> = (
     }
   };
 
+  // Datos para renderizar la tarjeta completa de la reseña
+  const authorName = resena?.user_name || notification.sender_name || 'Usuario';
+  const authorGender = resena?.user_gender;
+  const authorNationality = resena?.user_nationality;
+  const isAuthorGoogle = resena?.registered_with === 'google';
+  const starsCount = resena?.stars ?? 5;
+  const starsArr = Array.from({ length: 5 }, (_, i) => i + 1);
+  const reviewDate = resena?.created_at ? new Date(resena.created_at) : new Date(notification.created_at);
+  const formattedDate = reviewDate.toLocaleDateString('es-ES', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric'
+  });
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
       <div 
-        className="relative w-full max-w-xl bg-[#0f0f13] border border-white/10 rounded-2xl sm:rounded-3xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden"
+        className="relative w-full max-w-xl bg-[#0d0d12] border border-white/10 rounded-2xl sm:rounded-3xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
@@ -196,36 +289,147 @@ export const NotificationThreadModal: React.FC<NotificationThreadModalProps> = (
             </div>
           ) : (
             <div className="relative space-y-3">
-              {/* 1. Reseña Original */}
-              <div className="bg-black/30 border border-white/10 rounded-2xl p-4 space-y-2 relative">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-full bg-zinc-800 text-white flex items-center justify-center text-xs font-bold border border-white/10">
-                      {resena?.user_name ? resena.user_name.charAt(0).toUpperCase() : 'U'}
-                    </div>
-                    <div>
-                      <span className="text-xs font-semibold text-zinc-200">
-                        {resena?.user_name || 'Autor del Starpost'}
+              {/* 1. Tarjeta de la Reseña Original (Estilo idéntico a PersonajeProfileView) */}
+              <div className="bg-[#111116] border border-white/10 rounded-2xl p-4.5 space-y-3 shadow-lg transition-colors">
+                {/* Cabecera de la Reseña: Usuario, Insignias (Google, Sexo, País) y Fecha */}
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/5 pb-2.5">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-extrabold text-white">
+                      {authorName}
+                    </span>
+                    
+                    {/* Badge Google o Invitado */}
+                    {isAuthorGoogle ? (
+                      <span 
+                        title="Registrado con Google" 
+                        className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-white/10 border border-white/20 shadow-sm"
+                      >
+                        <svg className="w-3 h-3" viewBox="0 0 24 24">
+                          <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                          <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                          <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
+                          <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/>
+                        </svg>
                       </span>
-                      <span className="text-[10px] text-zinc-500 ml-2 font-mono">
-                        Reseña original
+                    ) : (
+                      <span 
+                        title="Usuario Invitado" 
+                        className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-zinc-800 border border-white/10 text-zinc-400"
+                      >
+                        <UserIcon className="w-2.5 h-2.5" />
                       </span>
-                    </div>
+                    )}
+
+                    {/* Insignia de Sexo: Masculino (♂) o Femenino (♀) */}
+                    {authorGender && (authorGender.toLowerCase() === 'masculino' || authorGender.toLowerCase() === 'hombre') && (
+                      <span 
+                        title="Sexo: Masculino" 
+                        className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-500/20 border border-blue-500/40 text-blue-400 font-bold text-xs"
+                      >
+                        ♂
+                      </span>
+                    )}
+                    {authorGender && (authorGender.toLowerCase() === 'femenino' || authorGender.toLowerCase() === 'mujer') && (
+                      <span 
+                        title="Sexo: Femenino" 
+                        className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-pink-500/20 border border-pink-500/40 text-pink-400 font-bold text-xs"
+                      >
+                        ♀
+                      </span>
+                    )}
+
+                    {/* Bandera HD del País */}
+                    {authorNationality && authorNationality !== 'No especificada' && (
+                      <span 
+                        title={`País: ${authorNationality}`} 
+                        className="inline-flex items-center justify-center p-0.5 rounded-sm bg-white/5 border border-white/10 shadow-xs"
+                      >
+                        <FlagImage countryName={authorNationality} size="sm" />
+                      </span>
+                    )}
                   </div>
 
-                  {resena && (
-                    <div className="flex items-center gap-1 bg-black/40 px-2 py-0.5 rounded-full border border-white/5 text-[11px] font-bold text-amber-400">
-                      <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                      <span>{resena.stars}</span>
-                    </div>
-                  )}
+                  {/* Fecha de publicación */}
+                  <span className="text-[10px] text-zinc-500 font-mono">
+                    {formattedDate}
+                  </span>
                 </div>
 
-                <p className="text-xs sm:text-sm text-zinc-300 pl-9">
-                  {resena?.review_text || (
-                    <span className="italic text-zinc-500">Calificó con estrellas este personaje.</span>
-                  )}
-                </p>
+                {/* Estrellas doradas y Texto de la Reseña */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-0.5">
+                    {starsArr.map((star) => (
+                      <Star
+                        key={star}
+                        className={`w-3.5 h-3.5 ${
+                          starsCount >= star
+                            ? 'fill-[#ffbf00] text-[#ffbf00]'
+                            : 'text-zinc-700'
+                        }`}
+                      />
+                    ))}
+                  </div>
+
+                  <p className="text-sm text-zinc-200 leading-relaxed font-normal whitespace-pre-wrap">
+                    {resena?.review_text || (
+                      <span className="italic text-zinc-500">Calificó con estrellas a este personaje.</span>
+                    )}
+                  </p>
+                </div>
+
+                {/* Barra Inferior: Contador de respuestas y Botones Like / Dislike */}
+                <div className="pt-2 border-t border-white/5 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-400">
+                    <MessageSquare className="w-3.5 h-3.5 text-zinc-500" />
+                    <span>
+                      {resena?.replies_count !== undefined && resena.replies_count > 0
+                        ? `${resena.replies_count} ${resena.replies_count === 1 ? 'respuesta' : 'respuestas'}`
+                        : 'Respuestas del Starpost'}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {/* Botón Like */}
+                    <button
+                      type="button"
+                      onClick={() => handleReaction('like')}
+                      disabled={isReacting}
+                      title={myReaction === 'like' ? 'Quitar Me gusta' : 'Me gusta'}
+                      className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                        myReaction === 'like'
+                          ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 shadow-xs'
+                          : 'text-zinc-400 hover:text-white hover:bg-white/5 border border-transparent'
+                      } ${isReacting ? 'opacity-50 cursor-wait' : ''}`}
+                    >
+                      <ThumbsUp 
+                        className={`w-3.5 h-3.5 transition-transform ${
+                          myReaction === 'like' ? 'fill-emerald-400 scale-110' : ''
+                        }`} 
+                      />
+                      <span className="font-mono text-xs">{resenaLikes}</span>
+                    </button>
+
+                    {/* Botón Dislike */}
+                    <button
+                      type="button"
+                      onClick={() => handleReaction('dislike')}
+                      disabled={isReacting}
+                      title={myReaction === 'dislike' ? 'Quitar No me gusta' : 'No me gusta'}
+                      className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                        myReaction === 'dislike'
+                          ? 'bg-rose-500/15 text-rose-400 border border-rose-500/30 shadow-xs'
+                          : 'text-zinc-400 hover:text-white hover:bg-white/5 border border-transparent'
+                      } ${isReacting ? 'opacity-50 cursor-wait' : ''}`}
+                    >
+                      <ThumbsDown 
+                        className={`w-3.5 h-3.5 transition-transform ${
+                          myReaction === 'dislike' ? 'fill-rose-400 scale-110' : ''
+                        }`} 
+                      />
+                      <span className="font-mono text-xs">{resenaDislikes}</span>
+                    </button>
+                  </div>
+                </div>
               </div>
 
               {/* Conector de hilo visual 1 */}
@@ -250,10 +454,40 @@ export const NotificationThreadModal: React.FC<NotificationThreadModalProps> = (
                     <div className="w-7 h-7 rounded-full bg-zinc-800 text-white flex items-center justify-center text-xs font-bold border border-white/10">
                       {reply1?.user_name ? reply1.user_name.charAt(0).toUpperCase() : 'U'}
                     </div>
-                    <div>
+                    <div className="flex items-center gap-1.5">
                       <span className="text-xs font-bold text-zinc-100">
                         {reply1?.user_name || notification.sender_name}
                       </span>
+
+                      {/* Insignias de la Respuesta 1 */}
+                      {reply1?.registered_with === 'google' && (
+                        <span title="Registrado con Google" className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-white/10 border border-white/20">
+                          <svg className="w-2.5 h-2.5" viewBox="0 0 24 24">
+                            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
+                            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/>
+                          </svg>
+                        </span>
+                      )}
+
+                      {reply1?.user_gender && (reply1.user_gender.toLowerCase() === 'masculino' || reply1.user_gender.toLowerCase() === 'hombre') && (
+                        <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-blue-500/20 border border-blue-500/40 text-blue-400 font-bold text-[10px]">
+                          ♂
+                        </span>
+                      )}
+                      {reply1?.user_gender && (reply1.user_gender.toLowerCase() === 'femenino' || reply1.user_gender.toLowerCase() === 'mujer') && (
+                        <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-pink-500/20 border border-pink-500/40 text-pink-400 font-bold text-[10px]">
+                          ♀
+                        </span>
+                      )}
+
+                      {reply1?.user_nationality && reply1.user_nationality !== 'No especificada' && (
+                        <span className="inline-flex items-center justify-center p-0.5 rounded-sm bg-white/5 border border-white/10 shadow-xs">
+                          <FlagImage countryName={reply1.user_nationality} size="sm" />
+                        </span>
+                      )}
+
                       {!isReplyToReply && (
                         <span className="ml-2 text-[10px] bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-full font-bold uppercase">
                           Nueva
@@ -294,10 +528,40 @@ export const NotificationThreadModal: React.FC<NotificationThreadModalProps> = (
                         <div className="w-7 h-7 rounded-full bg-red-600 text-white flex items-center justify-center text-xs font-black shadow-md">
                           {reply2?.user_name ? reply2.user_name.charAt(0).toUpperCase() : notification.sender_name.charAt(0).toUpperCase()}
                         </div>
-                        <div>
+                        <div className="flex items-center gap-1.5">
                           <span className="text-xs font-extrabold text-white">
                             {reply2?.user_name || notification.sender_name}
                           </span>
+
+                          {/* Insignias de la Respuesta 2 */}
+                          {reply2?.registered_with === 'google' && (
+                            <span title="Registrado con Google" className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-white/10 border border-white/20">
+                              <svg className="w-2.5 h-2.5" viewBox="0 0 24 24">
+                                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
+                                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/>
+                              </svg>
+                            </span>
+                          )}
+
+                          {reply2?.user_gender && (reply2.user_gender.toLowerCase() === 'masculino' || reply2.user_gender.toLowerCase() === 'hombre') && (
+                            <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-blue-500/20 border border-blue-500/40 text-blue-400 font-bold text-[10px]">
+                              ♂
+                            </span>
+                          )}
+                          {reply2?.user_gender && (reply2.user_gender.toLowerCase() === 'femenino' || reply2.user_gender.toLowerCase() === 'mujer') && (
+                            <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-pink-500/20 border border-pink-500/40 text-pink-400 font-bold text-[10px]">
+                              ♀
+                            </span>
+                          )}
+
+                          {reply2?.user_nationality && reply2.user_nationality !== 'No especificada' && (
+                            <span className="inline-flex items-center justify-center p-0.5 rounded-sm bg-white/5 border border-white/10 shadow-xs">
+                              <FlagImage countryName={reply2.user_nationality} size="sm" />
+                            </span>
+                          )}
+
                           <span className="ml-2 text-[10px] bg-red-500 text-white px-2 py-0.5 rounded-full font-bold uppercase shadow-sm">
                             ¡Nueva respuesta!
                           </span>
