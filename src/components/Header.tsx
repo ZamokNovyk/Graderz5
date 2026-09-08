@@ -44,7 +44,7 @@ export const Header: React.FC<HeaderProps> = ({
       >
         <div className="relative w-10 h-10 rounded-full bg-gradient-to-br from-red-600 via-red-700 to-black p-0.5 shadow-lg shadow-red-950/50 flex items-center justify-center border border-red-500/30 group-hover:scale-105 transition-transform duration-200 overflow-hidden">
           <img 
-            src="/imagenes/logograderz5.png" 
+            src="/imagenes/logograderz5.jpg" 
             alt="Graderz5 Logo" 
             className="w-full h-full rounded-full object-cover"
           />

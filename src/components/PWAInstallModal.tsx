@@ -82,12 +82,12 @@ export const PWAInstallModal: React.FC<PWAInstallModalProps> = ({
         <div className="flex flex-col items-center text-center gap-3 pt-2">
           <div className="relative w-20 h-20 rounded-2xl bg-gradient-to-br from-red-600/30 via-red-900/40 to-black p-1 shadow-xl shadow-red-950/60 border border-red-500/40 flex items-center justify-center">
             <img
-              src="/imagenes/pwa192.png"
+              src="/imagenes/pwa192.jpg"
               alt="Graderz5 Logo"
               className="w-full h-full object-contain rounded-xl"
               onError={(e) => {
                 // Fallback a logograderz5 si es necesario
-                (e.target as HTMLImageElement).src = '/imagenes/logograderz5.png';
+                (e.target as HTMLImageElement).src = '/imagenes/logograderz5.jpg';
               }}
             />
           </div>

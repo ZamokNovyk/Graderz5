@@ -11,27 +11,27 @@
   "scope": "/",
   "icons": [
     {
-      "src": "/imagenes/pwa192.png",
+      "src": "/imagenes/pwa192.jpg",
       "sizes": "192x192",
-      "type": "image/png",
+      "type": "image/jpeg",
       "purpose": "any"
     },
     {
-      "src": "/imagenes/pwa512.png",
+      "src": "/imagenes/pwa512.jpg",
       "sizes": "512x512",
-      "type": "image/png",
+      "type": "image/jpeg",
       "purpose": "any"
     },
     {
-      "src": "/imagenes/pwa512.png",
+      "src": "/imagenes/pwa512.jpg",
       "sizes": "512x512",
-      "type": "image/png",
+      "type": "image/jpeg",
       "purpose": "maskable"
     },
     {
-      "src": "/imagenes/180.png",
+      "src": "/imagenes/180.jpg",
       "sizes": "180x180",
-      "type": "image/png",
+      "type": "image/jpeg",
       "purpose": "any"
     }
   ]
