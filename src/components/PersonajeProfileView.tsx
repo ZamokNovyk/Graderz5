@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   ArrowLeft, 
   Star, 
@@ -749,20 +750,20 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
         </button>
       </div>
 
-      {/* Ventana Modal Explicativa con todo el texto legal detallado */}
-      {isDisclaimerModalOpen && (
+      {/* Ventana Modal Explicativa con todo el texto legal detallado (Con Portal para estar por encima de todo) */}
+      {isDisclaimerModalOpen && typeof document !== 'undefined' && createPortal(
         <div 
-          className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fadeIn"
+          className="fixed inset-0 bg-black/85 z-[99999] flex items-center justify-center p-3.5 sm:p-4 backdrop-blur-md animate-fadeIn overflow-y-auto"
           onClick={() => setIsDisclaimerModalOpen(false)}
         >
           <div 
-            className="bg-[#121218] border border-white/10 rounded-2xl max-w-lg w-full p-5 sm:p-6 shadow-2xl space-y-4 text-left relative"
+            className="bg-[#121218] border border-white/15 rounded-2xl max-w-lg w-full p-5 sm:p-6 shadow-[0_0_60px_rgba(0,0,0,0.95)] space-y-4 text-left relative max-h-[88vh] flex flex-col my-auto"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Cabecera del Modal */}
-            <div className="flex items-center justify-between border-b border-white/10 pb-3.5">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3.5 shrink-0">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center shrink-0">
+                <div className="w-8 h-8 rounded-xl bg-red-500/15 border border-red-500/30 flex items-center justify-center shrink-0">
                   <ShieldAlert className="w-4 h-4 text-red-400" />
                 </div>
                 <div>
@@ -784,56 +785,60 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
               </button>
             </div>
 
-            {/* Texto Principal Requerido */}
-            <div className="bg-red-950/25 border border-red-500/30 rounded-xl p-3.5 text-xs sm:text-sm text-zinc-200 leading-relaxed">
-              Este sitio web es un proyecto independiente con fines informativos y no está afiliado, patrocinado ni respaldado por <strong className="text-white font-semibold">{personaje.nombre}</strong> ni sus agencias.
-            </div>
-
-            {/* Secciones Explicativas */}
-            <div className="space-y-3 text-xs text-zinc-300 leading-relaxed max-h-[50vh] overflow-y-auto pr-1">
-              <div className="bg-black/40 border border-white/5 p-3 rounded-xl space-y-1">
-                <p className="font-bold text-white flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-red-400 inline-block" />
-                  Finalidad y Naturaleza Comunitaria
-                </p>
-                <p className="text-zinc-400">
-                  Graderz5 opera como una plataforma independiente de evaluación, ranking y opinión comunitaria. Ninguna de las fichas o evaluaciones publicadas implica vínculo representativo, comercial o contractual directo con las personalidades referenciadas.
-                </p>
+            {/* Contenido con scroll vertical protegido para móviles */}
+            <div className="overflow-y-auto pr-1 space-y-3 flex-1">
+              {/* Texto Principal Requerido */}
+              <div className="bg-red-950/30 border border-red-500/40 rounded-xl p-3.5 text-xs sm:text-sm text-zinc-200 leading-relaxed">
+                Este sitio web es un proyecto independiente con fines informativos y no está afiliado, patrocinado ni respaldado por <strong className="text-white font-semibold">{personaje.nombre}</strong> ni sus agencias.
               </div>
 
-              <div className="bg-black/40 border border-white/5 p-3 rounded-xl space-y-1">
-                <p className="font-bold text-white flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-red-400 inline-block" />
-                  Marcas y Derechos de Propiedad (Fair Use)
-                </p>
-                <p className="text-zinc-400">
-                  Los nombres artísticos, marcas comerciales registradas e imágenes de referencia son propiedad exclusiva de sus respectivos titulares y agencias. Se muestran estrictamente con carácter nominativo, documental e informativo.
-                </p>
-              </div>
+              {/* Secciones Explicativas */}
+              <div className="space-y-2.5 text-xs text-zinc-300 leading-relaxed">
+                <div className="bg-black/40 border border-white/5 p-3 rounded-xl space-y-1">
+                  <p className="font-bold text-white flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-400 inline-block" />
+                    Finalidad y Naturaleza Comunitaria
+                  </p>
+                  <p className="text-zinc-400">
+                    Graderz5 opera como una plataforma independiente de evaluación, ranking y opinión comunitaria. Ninguna de las fichas o evaluaciones publicadas implica vínculo representativo, comercial o contractual directo con las personalidades referenciadas.
+                  </p>
+                </div>
 
-              <div className="bg-black/40 border border-white/5 p-3 rounded-xl space-y-1">
-                <p className="font-bold text-white flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-red-400 inline-block" />
-                  Atribución de Fuentes Abiertas
-                </p>
-                <p className="text-zinc-400">
-                  Las biografías y fotografías provienen de los proyectos libres de la Fundación Wikimedia (Wikipedia bajo licencia CC BY-SA 4.0 y Wikimedia Commons) respetando las condiciones de atribución y licencias abiertas de sus respectivos autores.
-                </p>
+                <div className="bg-black/40 border border-white/5 p-3 rounded-xl space-y-1">
+                  <p className="font-bold text-white flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-400 inline-block" />
+                    Marcas y Derechos de Propiedad (Fair Use)
+                  </p>
+                  <p className="text-zinc-400">
+                    Los nombres artísticos, marcas comerciales registradas e imágenes de referencia son propiedad exclusiva de sus respectivos titulares y agencias. Se muestran estrictamente con carácter nominativo, documental e informativo.
+                  </p>
+                </div>
+
+                <div className="bg-black/40 border border-white/5 p-3 rounded-xl space-y-1">
+                  <p className="font-bold text-white flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-400 inline-block" />
+                    Atribución de Fuentes Abiertas
+                  </p>
+                  <p className="text-zinc-400">
+                    Las biografías y fotografías provienen de los proyectos libres de la Fundación Wikimedia (Wikipedia bajo licencia CC BY-SA 4.0 y Wikimedia Commons) respetando las condiciones de atribución y licencias abiertas de sus respectivos autores.
+                  </p>
+                </div>
               </div>
             </div>
 
             {/* Pie del modal con botón de cierre */}
-            <div className="pt-2 border-t border-white/10 flex justify-end">
+            <div className="pt-2 border-t border-white/10 flex justify-end shrink-0">
               <button
                 type="button"
                 onClick={() => setIsDisclaimerModalOpen(false)}
-                className="bg-red-600 hover:bg-red-500 text-white font-bold text-xs px-5 py-2 rounded-xl transition cursor-pointer shadow-lg shadow-red-900/30 active:scale-95"
+                className="bg-red-600 hover:bg-red-500 text-white font-bold text-xs px-5 py-2.5 rounded-xl transition cursor-pointer shadow-lg shadow-red-900/40 active:scale-95 w-full sm:w-auto"
               >
                 Entendido
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Top Navigation bar */}
@@ -1977,10 +1982,10 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
 
       </div>
 
-      {/* Lightbox Modal de Imagen de Perfil */}
-      {isImageLightboxOpen && personaje && personaje.image_url && (
+      {/* Lightbox Modal de Imagen de Perfil (Con Portal para estar por encima de todo) */}
+      {isImageLightboxOpen && personaje && personaje.image_url && typeof document !== 'undefined' && createPortal(
         <div 
-          className="fixed inset-0 bg-black/95 z-50 flex flex-col items-center justify-center p-4 backdrop-blur-md transition-all duration-300 animate-fadeIn"
+          className="fixed inset-0 bg-black/95 z-[99999] flex flex-col items-center justify-center p-4 backdrop-blur-md transition-all duration-300 animate-fadeIn"
           onClick={() => setIsImageLightboxOpen(false)}
         >
           {/* Botón de cerrar flotante */}
@@ -2062,7 +2067,8 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* MODAL DE RESPUESTAS A STARPOSTS (NIVEL 1 Y NIVEL 2) */}

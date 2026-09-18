@@ -179,7 +179,7 @@ export default function App() {
       />
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col relative z-10">
+      <main className="flex-1 flex flex-col relative">
         {/* If viewing a specific Personaje Profile (/personajes/:slug) */}
         {activePersonajeSlug ? (
           <PersonajeProfileView 
