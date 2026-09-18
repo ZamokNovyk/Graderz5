@@ -49,6 +49,11 @@ export interface Personaje {
   creator_uid: string;
   creator_name?: string;
   image_url: string;
+  image_author?: string;
+  image_license?: string;
+  image_license_url?: string;
+  image_source_url?: string;
+  image_title?: string;
   birth_date?: string;
   death_date?: string;
   birth_place?: string;

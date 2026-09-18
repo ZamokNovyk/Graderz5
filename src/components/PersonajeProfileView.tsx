@@ -30,11 +30,14 @@ import {
   Trash2,
   User as UserIcon,
   ThumbsUp,
-  ThumbsDown
+  ThumbsDown,
+  ChevronDown,
+  ShieldAlert,
+  Camera
 } from 'lucide-react';
 import { ActitudType, Personaje, PersonajeResena, StarpostReactionType } from '../types';
 import { User } from '../lib/firebase';
-import { getPersonajeBySlug, votePersonaje, getPersonajesList, recordPersonajeView } from '../lib/personajesService';
+import { getPersonajeBySlug, votePersonaje, getPersonajesList, recordPersonajeView, fetchWikimediaImageMetadata, WikimediaImageMetadata } from '../lib/personajesService';
 import { 
   getOrCreateGuestUid, 
   getUserPreferences, 
@@ -72,6 +75,8 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedUid, setCopiedUid] = useState(false);
   const [isImageLightboxOpen, setIsImageLightboxOpen] = useState(false);
+  const [isDisclaimerModalOpen, setIsDisclaimerModalOpen] = useState(false);
+  const [imageMeta, setImageMeta] = useState<WikimediaImageMetadata | null>(null);
   
   // Interactive Tabs (Default to 'resenas' per user request)
   const [activeTab, setActiveTab] = useState<'informacion' | 'resenas' | 'ship' | 'estadistica' | 'radar'>('resenas');
@@ -181,6 +186,26 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
     }
     loadData();
   }, [slug, currentUser]);
+
+  // Recuperar o hidratar metadata legal de la fotografía desde Wikimedia Commons
+  useEffect(() => {
+    if (!personaje) return;
+    if (personaje.image_author && personaje.image_license) {
+      setImageMeta({
+        author: personaje.image_author,
+        license: personaje.image_license,
+        licenseUrl: personaje.image_license_url,
+        sourceUrl: personaje.image_source_url,
+        title: personaje.image_title,
+      });
+    } else if (personaje.image_url && (personaje.image_url.includes('wikimedia.org') || personaje.image_url.includes('upload.wikimedia'))) {
+      fetchWikimediaImageMetadata(personaje.image_url).then((meta) => {
+        if (meta) {
+          setImageMeta(meta);
+        }
+      });
+    }
+  }, [personaje?.slug, personaje?.image_url, personaje?.image_author, personaje?.image_license]);
 
   const handleSelectActitud = async (target: ActitudType) => {
     if (isTogglingActitud || !personaje) return;
@@ -694,8 +719,123 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
 
   // Adapting the layout beautifully according to Starryz5 UI / image.png:
   return (
-    <div className="w-full max-w-4xl mx-auto px-4 py-6 sm:py-8 pb-32 space-y-8">
+    <div className="w-full max-w-4xl mx-auto px-4 py-6 sm:py-8 pb-32 space-y-6 sm:space-y-8">
       
+      {/* Barra de Exención de Responsabilidad Compacta (Ultra-delgada sin ocupar pantalla) */}
+      <div className="w-full bg-[#111116] border border-white/10 rounded-xl px-3.5 py-2 sm:px-4 sm:py-2.5 shadow-sm backdrop-blur-sm flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
+          <div className="w-6 h-6 rounded-lg bg-red-500/10 border border-red-500/20 flex items-center justify-center shrink-0">
+            <ShieldAlert className="w-3.5 h-3.5 text-red-400" />
+          </div>
+          <div className="flex items-center gap-1.5 sm:gap-2 text-[11px] truncate">
+            <span className="font-black tracking-wider uppercase text-red-400 font-mono shrink-0">
+              Aviso Legal
+            </span>
+            <span className="text-zinc-600 shrink-0">|</span>
+            <span className="text-zinc-400 font-medium truncate">
+              Exención de Responsabilidad
+            </span>
+          </div>
+        </div>
+
+        {/* Botón Ver Más colocado en el extremo derecho señalado */}
+        <button
+          type="button"
+          onClick={() => setIsDisclaimerModalOpen(true)}
+          className="text-xs font-bold text-red-400 hover:text-red-300 transition-all inline-flex items-center gap-1.5 cursor-pointer bg-red-500/10 hover:bg-red-500/20 active:scale-95 border border-red-500/30 px-3 py-1 rounded-lg shrink-0 shadow-sm"
+        >
+          <span>Ver más</span>
+          <ChevronDown className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
+      {/* Ventana Modal Explicativa con todo el texto legal detallado */}
+      {isDisclaimerModalOpen && (
+        <div 
+          className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fadeIn"
+          onClick={() => setIsDisclaimerModalOpen(false)}
+        >
+          <div 
+            className="bg-[#121218] border border-white/10 rounded-2xl max-w-lg w-full p-5 sm:p-6 shadow-2xl space-y-4 text-left relative"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Cabecera del Modal */}
+            <div className="flex items-center justify-between border-b border-white/10 pb-3.5">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center shrink-0">
+                  <ShieldAlert className="w-4 h-4 text-red-400" />
+                </div>
+                <div>
+                  <h3 className="text-sm sm:text-base font-bold text-white font-display">
+                    Aviso Legal y Exención de Responsabilidad
+                  </h3>
+                  <p className="text-[11px] font-mono text-red-400 uppercase tracking-wider">
+                    Términos de Información Pública
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsDisclaimerModalOpen(false)}
+                className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white flex items-center justify-center text-sm transition cursor-pointer"
+                title="Cerrar ventana"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Texto Principal Requerido */}
+            <div className="bg-red-950/25 border border-red-500/30 rounded-xl p-3.5 text-xs sm:text-sm text-zinc-200 leading-relaxed">
+              Este sitio web es un proyecto independiente con fines informativos y no está afiliado, patrocinado ni respaldado por <strong className="text-white font-semibold">{personaje.nombre}</strong> ni sus agencias.
+            </div>
+
+            {/* Secciones Explicativas */}
+            <div className="space-y-3 text-xs text-zinc-300 leading-relaxed max-h-[50vh] overflow-y-auto pr-1">
+              <div className="bg-black/40 border border-white/5 p-3 rounded-xl space-y-1">
+                <p className="font-bold text-white flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-400 inline-block" />
+                  Finalidad y Naturaleza Comunitaria
+                </p>
+                <p className="text-zinc-400">
+                  Graderz5 opera como una plataforma independiente de evaluación, ranking y opinión comunitaria. Ninguna de las fichas o evaluaciones publicadas implica vínculo representativo, comercial o contractual directo con las personalidades referenciadas.
+                </p>
+              </div>
+
+              <div className="bg-black/40 border border-white/5 p-3 rounded-xl space-y-1">
+                <p className="font-bold text-white flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-400 inline-block" />
+                  Marcas y Derechos de Propiedad (Fair Use)
+                </p>
+                <p className="text-zinc-400">
+                  Los nombres artísticos, marcas comerciales registradas e imágenes de referencia son propiedad exclusiva de sus respectivos titulares y agencias. Se muestran estrictamente con carácter nominativo, documental e informativo.
+                </p>
+              </div>
+
+              <div className="bg-black/40 border border-white/5 p-3 rounded-xl space-y-1">
+                <p className="font-bold text-white flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-400 inline-block" />
+                  Atribución de Fuentes Abiertas
+                </p>
+                <p className="text-zinc-400">
+                  Las biografías y fotografías provienen de los proyectos libres de la Fundación Wikimedia (Wikipedia bajo licencia CC BY-SA 4.0 y Wikimedia Commons) respetando las condiciones de atribución y licencias abiertas de sus respectivos autores.
+                </p>
+              </div>
+            </div>
+
+            {/* Pie del modal con botón de cierre */}
+            <div className="pt-2 border-t border-white/10 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setIsDisclaimerModalOpen(false)}
+                className="bg-red-600 hover:bg-red-500 text-white font-bold text-xs px-5 py-2 rounded-xl transition cursor-pointer shadow-lg shadow-red-900/30 active:scale-95"
+              >
+                Entendido
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Top Navigation bar */}
       <div className="flex items-center justify-between gap-4">
         <button
@@ -787,6 +927,55 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
               </div>
             )}
           </div>
+
+          {/* Atribución estricta y discreta de la fotografía (Wikimedia Commons) */}
+          {imageMeta && (
+            <div className="flex items-center justify-center gap-1.5 text-[11px] text-zinc-400 bg-black/40 border border-white/5 px-3 py-1 rounded-full max-w-md mx-auto">
+              <Camera className="w-3 h-3 text-zinc-500 shrink-0" />
+              <span className="truncate">
+                Foto:{' '}
+                {imageMeta.authorUrl ? (
+                  <a 
+                    href={imageMeta.authorUrl} 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    className="text-zinc-300 hover:text-white underline font-medium"
+                    title={imageMeta.author}
+                  >
+                    {imageMeta.author}
+                  </a>
+                ) : (
+                  <span className="text-zinc-300 font-medium">{imageMeta.author}</span>
+                )}
+                {' vía '}
+                {imageMeta.sourceUrl ? (
+                  <a 
+                    href={imageMeta.sourceUrl} 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    className="text-zinc-400 hover:text-zinc-200 underline"
+                  >
+                    Wikimedia Commons
+                  </a>
+                ) : (
+                  'Wikimedia Commons'
+                )}
+                {' / '}
+                {imageMeta.licenseUrl ? (
+                  <a 
+                    href={imageMeta.licenseUrl} 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    className="text-red-400 hover:text-red-300 font-mono font-medium underline"
+                  >
+                    {imageMeta.license}
+                  </a>
+                ) : (
+                  <span className="text-red-400/90 font-mono font-medium">{imageMeta.license}</span>
+                )}
+              </span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1020,19 +1209,33 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
               <p className="text-sm text-zinc-300 leading-relaxed">
                 {personaje.extract || 'Figura pública validada mediante los registros oficiales de Wikipedia y Wikidata.'}
               </p>
-              {personaje.wikipedia_url && (
-                <div className="pt-2">
+
+              {/* Atribución estricta de contenidos de Wikipedia */}
+              <div className="pt-3 border-t border-white/5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 text-xs text-zinc-400">
+                <p className="leading-relaxed">
+                  Texto bajo licencia{' '}
+                  <a
+                    href="https://creativecommons.org/licenses/by-sa/4.0/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-red-400 hover:text-red-300 font-semibold underline underline-offset-2"
+                  >
+                    CC BY-SA 4.0
+                  </a>{' '}
+                  de Wikipedia y sus colaboradores.
+                </p>
+                {personaje.wikipedia_url && (
                   <a
                     href={personaje.wikipedia_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 text-xs font-bold text-red-400 hover:text-red-300 transition"
+                    className="inline-flex items-center gap-1.5 font-bold text-red-400 hover:text-red-300 transition shrink-0"
                   >
                     <span>Ver artículo completo en Wikipedia</span>
                     <ExternalLink className="w-3.5 h-3.5" />
                   </a>
-                </div>
-              )}
+                )}
+              </div>
             </div>
 
             {/* Registration Database metadata grid */}
@@ -1803,22 +2006,58 @@ export const PersonajeProfileView: React.FC<PersonajeProfileViewProps> = ({ slug
                 referrerPolicy="no-referrer"
               />
               
-              {/* Pie de foto con título */}
-              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/70 to-transparent p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                <div>
-                  <h3 className="text-white font-black text-lg tracking-wide uppercase">{personaje.nombre}</h3>
-                  <p className="text-zinc-400 text-xs font-mono">{personaje.wikidata_id || 'ID de Wikidata'}</p>
+              {/* Pie de foto con título y atribución */}
+              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/85 to-transparent p-4 sm:p-5 flex flex-col gap-2.5">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                  <div>
+                    <h3 className="text-white font-black text-lg tracking-wide uppercase">{personaje.nombre}</h3>
+                    <p className="text-zinc-400 text-xs font-mono">{personaje.wikidata_id || 'ID de Wikidata'}</p>
+                  </div>
+                  {personaje.wikipedia_url && (
+                    <a 
+                      href={personaje.wikipedia_url} 
+                      target="_blank" 
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 text-xs text-red-400 hover:text-red-300 hover:underline font-bold"
+                    >
+                      <span>Ver en Wikipedia</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  )}
                 </div>
-                {personaje.wikipedia_url && (
-                  <a 
-                    href={personaje.wikipedia_url} 
-                    target="_blank" 
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1.5 text-xs text-red-400 hover:text-red-300 hover:underline font-bold"
-                  >
-                    <span>Ver en Wikipedia</span>
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </a>
+
+                {/* Atribución detallada de Wikimedia Commons */}
+                {imageMeta && (
+                  <div className="pt-2 border-t border-white/10 flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-400">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-zinc-500 font-bold uppercase text-[10px]">Autor / Fotógrafo:</span>
+                      {imageMeta.authorUrl ? (
+                        <a href={imageMeta.authorUrl} target="_blank" rel="noopener noreferrer" className="text-zinc-200 hover:text-white underline font-medium">
+                          {imageMeta.author}
+                        </a>
+                      ) : (
+                        <span className="text-zinc-200 font-medium">{imageMeta.author}</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-zinc-500 font-bold uppercase text-[10px]">Licencia:</span>
+                      {imageMeta.licenseUrl ? (
+                        <a href={imageMeta.licenseUrl} target="_blank" rel="noopener noreferrer" className="text-red-400 hover:text-red-300 underline font-mono font-bold">
+                          {imageMeta.license}
+                        </a>
+                      ) : (
+                        <span className="font-mono text-zinc-300 font-semibold">{imageMeta.license}</span>
+                      )}
+                      {imageMeta.sourceUrl && (
+                        <>
+                          <span className="text-zinc-600">·</span>
+                          <a href={imageMeta.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-zinc-400 hover:text-zinc-200 underline text-[11px]">
+                            Wikimedia Commons
+                          </a>
+                        </>
+                      )}
+                    </div>
+                  </div>
                 )}
               </div>
             </div>

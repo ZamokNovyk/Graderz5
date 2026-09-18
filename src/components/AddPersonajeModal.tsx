@@ -82,6 +82,11 @@ export const AddPersonajeModal: React.FC<AddPersonajeModalProps> = ({
           nombre: result.exactTitle || result.title,
           slug: createSlug(result.exactTitle || result.title),
           imageUrl: result.imageUrl,
+          imageAuthor: result.imageAuthor,
+          imageLicense: result.imageLicense,
+          imageLicenseUrl: result.imageLicenseUrl,
+          imageSourceUrl: result.imageSourceUrl,
+          imageTitle: result.imageTitle,
           birthDate: result.birthDate,
           deathDate: result.deathDate,
           birthPlace: result.birthPlace,
@@ -265,6 +270,12 @@ export const AddPersonajeModal: React.FC<AddPersonajeModalProps> = ({
                       <div className="absolute -top-1.5 -left-1.5 bg-gradient-to-r from-red-600 to-rose-600 text-white border border-red-400/70 text-[10px] font-black px-2 py-0.5 rounded-md shadow-[0_0_10px_rgba(220,38,38,0.5)] flex items-center gap-1 z-10 font-mono">
                         <span>🎗️</span>
                         <span>Fallecido</span>
+                      </div>
+                    )}
+
+                    {result.imageAuthor && (
+                      <div className="mt-1 text-[9px] text-zinc-500 truncate max-w-[80px] sm:max-w-[96px]" title={`Foto: ${result.imageAuthor} (${result.imageLicense || 'Wikimedia'})`}>
+                        Foto: {result.imageAuthor}
                       </div>
                     )}
                   </div>

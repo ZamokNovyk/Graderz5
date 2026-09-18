@@ -1,6 +1,15 @@
 import { Personaje, PersonajeFamiliar } from '../types';
 import { supabase } from './supabase';
 
+export interface WikimediaImageMetadata {
+  author: string;
+  authorUrl?: string;
+  license: string;
+  licenseUrl?: string;
+  sourceUrl?: string;
+  title?: string;
+}
+
 export interface WikiVerificationResult {
   isValid: boolean;
   isHuman: boolean;
@@ -10,6 +19,12 @@ export interface WikiVerificationResult {
   exactTitle: string;
   wikidataId?: string;
   imageUrl?: string;
+  imageAuthor?: string;
+  imageAuthorUrl?: string;
+  imageLicense?: string;
+  imageLicenseUrl?: string;
+  imageSourceUrl?: string;
+  imageTitle?: string;
   birthDate?: string;
   deathDate?: string;
   birthPlace?: string;
@@ -90,6 +105,77 @@ async function safeFetchJson<T = any>(url: string, timeoutMs = 9000): Promise<T 
     return await res.json();
   } catch (err) {
     console.warn(`[WikiFetch] Error consultando ${url}:`, err);
+    return null;
+  }
+}
+
+function stripHtml(html: string): string {
+  if (!html) return '';
+  return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function extractFirstHref(html: string): string | undefined {
+  if (!html) return undefined;
+  const match = html.match(/href=["']([^"']+)["']/i);
+  return match ? match[1] : undefined;
+}
+
+export function extractWikimediaFileName(urlOrName: string): string | null {
+  if (!urlOrName) return null;
+  const trimmed = urlOrName.trim();
+  if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
+    return trimmed.replace(/^File:/i, '').replace(/^Archivo:/i, '').trim();
+  }
+  try {
+    const cleanUrl = trimmed.split('?')[0];
+    const parts = cleanUrl.split('/');
+    const thumbIdx = parts.indexOf('thumb');
+    if (thumbIdx !== -1 && parts.length > thumbIdx + 3) {
+      return decodeURIComponent(parts[thumbIdx + 3]);
+    }
+    return decodeURIComponent(parts[parts.length - 1]);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Consulta la API de Wikimedia Commons para obtener autor/fotógrafo, licencia oficial y enlaces de atribución
+ */
+export async function fetchWikimediaImageMetadata(imageFileNameOrUrl: string): Promise<WikimediaImageMetadata | null> {
+  const fileName = extractWikimediaFileName(imageFileNameOrUrl);
+  if (!fileName) return null;
+
+  try {
+    const apiUrl = `https://commons.wikimedia.org/w/api.php?action=query&titles=File:${encodeURIComponent(fileName)}&prop=imageinfo&iiprop=extmetadata|url&format=json&origin=*`;
+    const res = await safeFetchJson<any>(apiUrl, 8000);
+    const pages = res?.query?.pages;
+    if (!pages) return null;
+
+    const page = Object.values(pages)[0] as any;
+    const info = page?.imageinfo?.[0];
+    if (!info) return null;
+
+    const meta = info.extmetadata || {};
+    const artistRaw = meta.Artist?.value || '';
+    const creditRaw = meta.Credit?.value || '';
+    const authorClean = stripHtml(artistRaw) || stripHtml(creditRaw) || 'Autor en Wikimedia Commons';
+    const authorUrl = extractFirstHref(artistRaw) || extractFirstHref(creditRaw);
+    const license = meta.LicenseShortName?.value || meta.License?.value || meta.UsageTerms?.value || 'Creative Commons (CC BY-SA)';
+    const licenseUrl = meta.LicenseUrl?.value;
+    const sourceUrl = info.descriptionurl || `https://commons.wikimedia.org/wiki/File:${encodeURIComponent(fileName)}`;
+    const title = stripHtml(meta.ObjectName?.value || meta.ImageDescription?.value) || fileName;
+
+    return {
+      author: authorClean,
+      authorUrl,
+      license,
+      licenseUrl,
+      sourceUrl,
+      title
+    };
+  } catch (e) {
+    console.warn('[fetchWikimediaImageMetadata] Error:', e);
     return null;
   }
 }
@@ -377,6 +463,7 @@ export async function verifyPersonOnWikipedia(query: string): Promise<WikiVerifi
     // Paso 2: Resumen oficial y extracto introductorio completo en Wikipedia API (Action API con CORS origin=*)
     let wikidataId: string | undefined = wikidataDirectItem?.id;
     let imageUrl: string | undefined = undefined;
+    let imageFileName: string | undefined = undefined;
     let extract = wikidataDirectItem?.description || '';
     let wikipediaUrl = `https://es.wikipedia.org/wiki/${encodeURIComponent(exactTitle)}`;
     let isDisambiguation = false;
@@ -397,6 +484,9 @@ export async function verifyPersonOnWikipedia(query: string): Promise<WikiVerifi
           }
           if (pData.extract) extract = (pData.extract || '').trim();
           imageUrl = pData.original?.source || pData.thumbnail?.source;
+          if (pData.pageimage) imageFileName = pData.pageimage;
+          if (pData.pageprops?.page_image_free) imageFileName = pData.pageprops.page_image_free;
+          if (pData.pageprops?.page_image && !imageFileName) imageFileName = pData.pageprops.page_image;
           if (pData.fullurl) {
             wikipediaUrl = pData.fullurl;
           }
@@ -418,6 +508,8 @@ export async function verifyPersonOnWikipedia(query: string): Promise<WikiVerifi
           if (pData && pageId !== '-1') {
             if (!wikidataId) wikidataId = pData.pageprops?.wikibase_item;
             if (!imageUrl) imageUrl = pData.original?.source || pData.thumbnail?.source;
+            if (pData.pageimage && !imageFileName) imageFileName = pData.pageimage;
+            if (pData.pageprops?.page_image_free && !imageFileName) imageFileName = pData.pageprops.page_image_free;
             if (!extract && pData.extract) extract = pData.extract.trim();
           }
         }
@@ -872,6 +964,16 @@ export async function verifyPersonOnWikipedia(query: string): Promise<WikiVerifi
       };
     }
 
+    // Atribución estricta y legal de Wikimedia Commons para la fotografía
+    let imageMeta: WikimediaImageMetadata | null = null;
+    if (imageUrl || imageFileName) {
+      try {
+        imageMeta = await fetchWikimediaImageMetadata(imageFileName || imageUrl!);
+      } catch (e) {
+        console.warn('No se pudo recuperar metadata legal de la imagen:', e);
+      }
+    }
+
     return {
       isValid: true,
       isHuman: true,
@@ -881,6 +983,12 @@ export async function verifyPersonOnWikipedia(query: string): Promise<WikiVerifi
       exactTitle,
       wikidataId,
       imageUrl,
+      imageAuthor: imageMeta?.author,
+      imageAuthorUrl: imageMeta?.authorUrl,
+      imageLicense: imageMeta?.license,
+      imageLicenseUrl: imageMeta?.licenseUrl,
+      imageSourceUrl: imageMeta?.sourceUrl,
+      imageTitle: imageMeta?.title,
       birthDate,
       deathDate,
       birthPlace,
@@ -1223,6 +1331,11 @@ export async function savePersonaje(
     nombre: string;
     slug?: string;
     imageUrl?: string;
+    imageAuthor?: string;
+    imageLicense?: string;
+    imageLicenseUrl?: string;
+    imageSourceUrl?: string;
+    imageTitle?: string;
     birthDate?: string;
     deathDate?: string;
     birthPlace?: string;
@@ -1289,6 +1402,11 @@ export async function savePersonaje(
     creator_uid: creatorUid || 'anon-uid',
     creator_name: creatorName || 'Usuario Graderz5',
     image_url: data.imageUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
+    image_author: data.imageAuthor,
+    image_license: data.imageLicense,
+    image_license_url: data.imageLicenseUrl,
+    image_source_url: data.imageSourceUrl,
+    image_title: data.imageTitle,
     birth_date: data.birthDate || 'No disponible',
     death_date: data.deathDate,
     birth_place: data.birthPlace,
@@ -1321,6 +1439,22 @@ export async function savePersonaje(
     reviews_count: 0,
     created_at: new Date().toISOString()
   };
+
+  // Si no se proporcionó autor de imagen pero es de Wikimedia, intentar completarlo
+  if (!newPersonaje.image_author && newPersonaje.image_url && newPersonaje.image_url.includes('wikimedia.org')) {
+    try {
+      const meta = await fetchWikimediaImageMetadata(newPersonaje.image_url);
+      if (meta) {
+        newPersonaje.image_author = meta.author;
+        newPersonaje.image_license = meta.license;
+        newPersonaje.image_license_url = meta.licenseUrl;
+        newPersonaje.image_source_url = meta.sourceUrl;
+        newPersonaje.image_title = meta.title;
+      }
+    } catch {
+      // Ignorar fallback silencioso
+    }
+  }
 
   // Guardar en caché local
   try {
